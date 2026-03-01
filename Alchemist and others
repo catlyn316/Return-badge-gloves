@@ -1,0 +1,1147 @@
+-- 貓玲的鍊金手套腳本 v1.0
+-- 整合：全能控制器 + 鍊金藥水 + 面向/ESP
+
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- 清除舊 GUI
+if CoreGui:FindFirstChild("MaolingAlchemyHub") then CoreGui.MaolingAlchemyHub:Destroy() end
+if playerGui:FindFirstChild("MaolingAlchemyHub") then playerGui.MaolingAlchemyHub:Destroy() end
+
+-- ══════════════════════════════════════════
+-- 狀態變數
+-- ══════════════════════════════════════════
+local trueLightingBackup = {
+    Ambient = Lighting.Ambient, OutdoorAmbient = Lighting.OutdoorAmbient,
+    Brightness = Lighting.Brightness, ColorShift_Bottom = Lighting.ColorShift_Bottom,
+    ColorShift_Top = Lighting.ColorShift_Top, FogEnd = Lighting.FogEnd
+}
+local postEffectBackups = {}
+local atmosphereBackups = {}
+local originalSpeed = 16
+local originalJump = 50
+local originalGravity = 196.2
+local hasOriginalValues = false
+
+local toggles = {
+    speed=false, jump=false, gravity=false, fullbright=false,
+    cameraDist=false, nofog=false, brightness=false,
+    noFilter=false, slapAura=false
+}
+local values = {
+    speed=25, jump=75, gravity=50, fullbright=0.8,
+    cameraDist=125, brightness=2, auraRange=17
+}
+local connections = {
+    speed=nil, jump=nil, gravity=nil, fullbright=nil,
+    nofog=nil, brightness=nil, noFilter=nil,
+    fixCam=nil, camDistGuard=nil, aura=nil, plague=nil
+}
+
+local fixCamEnabled = false
+local fixCamConn = nil
+local auraEnabled = false
+local auraLastFire = 0
+
+-- ══════════════════════════════════════════
+-- 工具函式
+-- ══════════════════════════════════════════
+local function getOriginalValues()
+    if toggles.speed or toggles.jump or toggles.gravity then return end
+    local character = player.Character
+    if character then
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            originalSpeed = humanoid.WalkSpeed
+            originalJump = humanoid.UseJumpPower and humanoid.JumpPower or humanoid.JumpHeight
+        end
+    end
+    originalGravity = Workspace.Gravity
+    hasOriginalValues = true
+end
+
+local function backupPostEffects()
+    for _, v in pairs(Lighting:GetChildren()) do
+        if v:IsA("PostEffect") and not postEffectBackups[v] then
+            postEffectBackups[v] = {Enabled=v.Enabled}
+            if v:IsA("BloomEffect") then postEffectBackups[v].Intensity=v.Intensity; postEffectBackups[v].Size=v.Size; postEffectBackups[v].Threshold=v.Threshold
+            elseif v:IsA("BlurEffect") then postEffectBackups[v].Size=v.Size
+            elseif v:IsA("ColorCorrectionEffect") then postEffectBackups[v].Brightness=v.Brightness; postEffectBackups[v].Contrast=v.Contrast; postEffectBackups[v].Saturation=v.Saturation; postEffectBackups[v].TintColor=v.TintColor
+            elseif v:IsA("SunRaysEffect") then postEffectBackups[v].Intensity=v.Intensity; postEffectBackups[v].Spread=v.Spread end
+        end
+    end
+end
+
+local function backupAtmospheres()
+    for _, v in pairs(Lighting:GetDescendants()) do
+        if v:IsA("Atmosphere") and not atmosphereBackups[v] then
+            atmosphereBackups[v] = {Density=v.Density,Offset=v.Offset,Color=v.Color,Decay=v.Decay,Glare=v.Glare,Haze=v.Haze}
+        end
+    end
+end
+
+local function updateLighting()
+    if toggles.fullbright then
+        if connections.brightness then connections.brightness:Disconnect() end
+        if connections.fullbright then connections.fullbright:Disconnect() end
+        connections.fullbright = RunService.RenderStepped:Connect(function()
+            local a = math.min(values.fullbright, 1)
+            Lighting.Ambient=Color3.new(a,a,a); Lighting.Brightness=values.fullbright
+            Lighting.ColorShift_Bottom=Color3.new(a,a,a); Lighting.ColorShift_Top=Color3.new(a,a,a)
+            Lighting.OutdoorAmbient=Color3.new(a,a,a)
+        end)
+    elseif toggles.brightness then
+        if connections.fullbright then connections.fullbright:Disconnect() end
+        if connections.brightness then connections.brightness:Disconnect() end
+        Lighting.Ambient=trueLightingBackup.Ambient; Lighting.OutdoorAmbient=trueLightingBackup.OutdoorAmbient
+        Lighting.ColorShift_Bottom=trueLightingBackup.ColorShift_Bottom; Lighting.ColorShift_Top=trueLightingBackup.ColorShift_Top
+        connections.brightness = RunService.RenderStepped:Connect(function() Lighting.Brightness=values.brightness end)
+    else
+        if connections.fullbright then connections.fullbright:Disconnect() end
+        if connections.brightness then connections.brightness:Disconnect() end
+        Lighting.Ambient=trueLightingBackup.Ambient; Lighting.Brightness=trueLightingBackup.Brightness
+        Lighting.OutdoorAmbient=trueLightingBackup.OutdoorAmbient
+        Lighting.ColorShift_Bottom=trueLightingBackup.ColorShift_Bottom; Lighting.ColorShift_Top=trueLightingBackup.ColorShift_Top
+    end
+end
+
+local function applySpeed(char)
+    if not char then char=player.Character end; if not char then return end
+    local hum=char:WaitForChild("Humanoid",10); if not hum then return end
+    if connections.speed then connections.speed:Disconnect() end
+    if toggles.speed then
+        hum.WalkSpeed=values.speed
+        connections.speed=hum:GetPropertyChangedSignal("WalkSpeed"):Connect(function() if toggles.speed then hum.WalkSpeed=values.speed end end)
+    else hum.WalkSpeed=originalSpeed end
+end
+
+local function applyJump(char)
+    if not char then char=player.Character end; if not char then return end
+    local hum=char:WaitForChild("Humanoid",10); if not hum then return end
+    if connections.jump then connections.jump:Disconnect() end
+    if toggles.jump then
+        if hum.UseJumpPower then
+            hum.JumpPower=values.jump
+            connections.jump=hum:GetPropertyChangedSignal("JumpPower"):Connect(function() if toggles.jump then hum.JumpPower=values.jump end end)
+        else
+            hum.JumpHeight=values.jump
+            connections.jump=hum:GetPropertyChangedSignal("JumpHeight"):Connect(function() if toggles.jump then hum.JumpHeight=values.jump end end)
+        end
+    else
+        if hum.UseJumpPower then hum.JumpPower=originalJump else hum.JumpHeight=originalJump end
+    end
+end
+
+local function applyFixCamera()
+    local cam = Workspace.CurrentCamera; if not cam then return end
+    cam.CameraType = Enum.CameraType.Custom
+    player.CameraMode = Enum.CameraMode.Classic
+    player.CameraMinZoomDistance = 0.5; player.CameraMaxZoomDistance = 500
+    local char = player.Character
+    if char then local hum=char:FindFirstChildOfClass("Humanoid"); if hum then hum.CameraOffset=Vector3.new(0,0,0) end end
+    task.delay(0.05, function()
+        if Workspace.CurrentCamera then Workspace.CurrentCamera.CameraType=Enum.CameraType.Scriptable end
+        task.delay(0.08, function()
+            if Workspace.CurrentCamera then
+                Workspace.CurrentCamera.CameraType=Enum.CameraType.Custom
+                player.CameraMode=Enum.CameraMode.Classic
+                player.CameraMinZoomDistance=0.5; player.CameraMaxZoomDistance=500
+            end
+        end)
+    end)
+end
+
+local function startFixCamGuard()
+    if fixCamConn then fixCamConn:Disconnect() end
+    fixCamConn = RunService.Heartbeat:Connect(function()
+        if not fixCamEnabled then return end
+        local cam=Workspace.CurrentCamera; if not cam then return end
+        if cam.CameraType~=Enum.CameraType.Custom then cam.CameraType=Enum.CameraType.Custom end
+        if player.CameraMode==Enum.CameraMode.LockFirstPerson then
+            player.CameraMode=Enum.CameraMode.Classic; player.CameraMinZoomDistance=0.5; player.CameraMaxZoomDistance=500
+        end
+        if player.CameraMaxZoomDistance<10 then player.CameraMaxZoomDistance=500 end
+    end)
+end
+
+-- ══════════════════════════════════════════
+-- 鍊金藥水功能
+-- ══════════════════════════════════════════
+G = {}
+function G.potion(ingredients)
+    game:GetService("ReplicatedStorage"):WaitForChild("GeneralAbility"):FireServer()
+    local AlchemistEvent = game:GetService("ReplicatedStorage"):WaitForChild("AlchemistEvent")
+    for _, item in ipairs(ingredients) do
+        AlchemistEvent:FireServer("AddItem", item)
+        AlchemistEvent:FireServer("MixItem", item)
+    end
+    AlchemistEvent:FireServer("BrewPotion")
+end
+
+player.CharacterAdded:Connect(function(newChar)
+    task.wait(0.5)
+    if toggles.speed then applySpeed(newChar) end
+    if toggles.jump then applyJump(newChar) end
+    if fixCamEnabled then task.wait(0.5); applyFixCamera() end
+end)
+
+-- ══════════════════════════════════════════
+-- UI 建構
+-- ══════════════════════════════════════════
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "MaolingAlchemyHub"
+screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = true
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+screenGui.DisplayOrder = 10001
+local function parentUI(g)
+    local ok = pcall(function()
+        if gethui then g.Parent=gethui()
+        elseif CoreGui then g.Parent=CoreGui
+        else g.Parent=playerGui end
+    end)
+    if not ok then g.Parent=playerGui end
+end
+parentUI(screenGui)
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 280, 0, 310)
+mainFrame.Position = UDim2.new(0.5, -140, 0.5, -155)
+mainFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
+
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 32)
+titleBar.BackgroundColor3 = Color3.fromRGB(80, 50, 140)
+titleBar.Parent = mainFrame
+Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 10)
+
+local titleFix = Instance.new("Frame")
+titleFix.Size = UDim2.new(1, 0, 0.5, 0)
+titleFix.Position = UDim2.new(0, 0, 0.5, 0)
+titleFix.BackgroundColor3 = Color3.fromRGB(80, 50, 140)
+titleFix.BorderSizePixel = 0
+titleFix.Parent = titleBar
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, -60, 1, 0)
+titleLabel.Position = UDim2.new(0, 8, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "🧪 貓玲的鍊金手套腳本"
+titleLabel.TextSize = 13
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = titleBar
+
+local minimizeButton = Instance.new("TextButton")
+minimizeButton.Size=UDim2.new(0,24,0,24); minimizeButton.Position=UDim2.new(1,-54,0,4)
+minimizeButton.BackgroundColor3=Color3.fromRGB(158,158,158); minimizeButton.Text="─"
+minimizeButton.TextColor3=Color3.fromRGB(255,255,255); minimizeButton.Parent=titleBar
+Instance.new("UICorner", minimizeButton).CornerRadius=UDim.new(0,5)
+
+local closeButton = Instance.new("TextButton")
+closeButton.Size=UDim2.new(0,24,0,24); closeButton.Position=UDim2.new(1,-28,0,4)
+closeButton.BackgroundColor3=Color3.fromRGB(244,67,54); closeButton.Text="X"
+closeButton.TextColor3=Color3.fromRGB(255,255,255); closeButton.Parent=titleBar
+Instance.new("UICorner", closeButton).CornerRadius=UDim.new(0,5)
+
+-- 分頁列
+local tabBar = Instance.new("Frame")
+tabBar.Size=UDim2.new(0.92,0,0,28); tabBar.Position=UDim2.new(0.04,0,0,38)
+tabBar.BackgroundColor3=Color3.fromRGB(240,240,240); tabBar.Parent=mainFrame
+Instance.new("UICorner", tabBar).CornerRadius=UDim.new(0,6)
+
+local function createTab(text, index, total)
+    local tab = Instance.new("TextButton")
+    local w = 1/total
+    tab.Size=UDim2.new(w,-4,1,-4); tab.Position=UDim2.new((index-1)*w,2,0,2)
+    tab.BackgroundColor3=Color3.fromRGB(200,200,200); tab.Text=text; tab.TextSize=10
+    tab.Font=Enum.Font.GothamBold; tab.TextColor3=Color3.fromRGB(100,100,100); tab.Parent=tabBar
+    Instance.new("UICorner", tab).CornerRadius=UDim.new(0,4)
+    return tab
+end
+local tab1=createTab("基礎/Aura",1,4)
+local tab2=createTab("視野燈光",2,4)
+local tab3=createTab("鍊金藥水",3,4)
+local tab4=createTab("傳送藥水",4,4)
+
+local contentContainer = Instance.new("Frame")
+contentContainer.Size=UDim2.new(0.92,0,0,220); contentContainer.Position=UDim2.new(0.04,0,0,72)
+contentContainer.BackgroundTransparency=1; contentContainer.Parent=mainFrame; contentContainer.ClipsDescendants=true
+
+local function createScrollingPage(parent)
+    local page = Instance.new("ScrollingFrame")
+    page.Size=UDim2.new(1,0,1,0); page.BackgroundTransparency=1; page.BorderSizePixel=0
+    page.ScrollBarThickness=4; page.AutomaticCanvasSize=Enum.AutomaticSize.Y
+    page.Visible=false; page.Parent=parent
+    local layout = Instance.new("UIListLayout")
+    layout.Padding=UDim.new(0,5); layout.SortOrder=Enum.SortOrder.LayoutOrder
+    layout.HorizontalAlignment=Enum.HorizontalAlignment.Center; layout.Parent=page
+    local padding = Instance.new("UIPadding")
+    padding.PaddingRight=UDim.new(0,4); padding.PaddingTop=UDim.new(0,4); padding.Parent=page
+    return page
+end
+local page1=createScrollingPage(contentContainer) -- 基礎/Aura
+local page2=createScrollingPage(contentContainer) -- 視野燈光
+local page3=createScrollingPage(contentContainer) -- 鍊金藥水
+local page4=createScrollingPage(contentContainer) -- 傳送藥水
+page1.Visible=true
+
+local function switchTab(n)
+    page1.Visible=(n==1); page2.Visible=(n==2); page3.Visible=(n==3); page4.Visible=(n==4)
+    local tabs={tab1,tab2,tab3,tab4}
+    for i,t in ipairs(tabs) do
+        t.BackgroundColor3=(i==n) and Color3.fromRGB(80,50,140) or Color3.fromRGB(200,200,200)
+        t.TextColor3=(i==n) and Color3.new(1,1,1) or Color3.fromRGB(100,100,100)
+    end
+end
+tab1.MouseButton1Click:Connect(function() switchTab(1) end)
+tab2.MouseButton1Click:Connect(function() switchTab(2) end)
+tab3.MouseButton1Click:Connect(function() switchTab(3) end)
+tab4.MouseButton1Click:Connect(function() switchTab(4) end)
+switchTab(1)
+
+-- 狀態列
+local statusLabel=Instance.new("TextLabel")
+statusLabel.Size=UDim2.new(0.92,0,0,26); statusLabel.Position=UDim2.new(0.04,0,1,-34)
+statusLabel.BackgroundColor3=Color3.fromRGB(255,235,238); statusLabel.Text="系統就緒"
+statusLabel.TextSize=11; statusLabel.Font=Enum.Font.GothamBold
+statusLabel.TextColor3=Color3.fromRGB(198,40,40); statusLabel.Parent=mainFrame
+Instance.new("UICorner", statusLabel).CornerRadius=UDim.new(0,5)
+
+-- ══════════════════════════════════════════
+-- UI 元件建構函式
+-- ══════════════════════════════════════════
+local function createControlRow(parent, labelText, placeholder, defaultVal, isInput, order)
+    local frame=Instance.new("Frame"); frame.Size=UDim2.new(1,0,0,32); frame.BackgroundColor3=Color3.fromRGB(248,249,250); frame.LayoutOrder=order or 0; frame.Parent=parent; Instance.new("UICorner",frame).CornerRadius=UDim.new(0,6)
+    local label=Instance.new("TextLabel"); label.Size=UDim2.new(0,80,1,0); label.Position=UDim2.new(0,6,0,0); label.BackgroundTransparency=1; label.Text=labelText; label.TextSize=12; label.Font=Enum.Font.GothamBold; label.TextColor3=Color3.fromRGB(85,85,85); label.TextXAlignment=Enum.TextXAlignment.Left; label.Parent=frame
+    local input
+    if isInput then
+        input=Instance.new("TextBox"); input.Size=UDim2.new(0,60,0,22); input.Position=UDim2.new(0,84,0,5); input.BackgroundColor3=Color3.fromRGB(255,255,255); input.BorderSizePixel=1; input.BorderColor3=Color3.fromRGB(221,221,221); input.Text=defaultVal; input.PlaceholderText=placeholder; input.TextSize=13; input.Font=Enum.Font.Gotham; input.TextColor3=Color3.fromRGB(50,50,50); input.Parent=frame; Instance.new("UICorner",input).CornerRadius=UDim.new(0,5)
+    else
+        input=Instance.new("TextLabel"); input.Size=UDim2.new(0,60,0,22); input.Position=UDim2.new(0,84,0,5); input.BackgroundTransparency=1; input.Text="關閉"; input.TextSize=13; input.Font=Enum.Font.Gotham; input.TextColor3=Color3.fromRGB(150,150,150); input.Parent=frame
+    end
+    local btn=Instance.new("TextButton"); btn.Size=UDim2.new(0,50,0,22); btn.Position=UDim2.new(1,-54,0,5); btn.BackgroundColor3=Color3.fromRGB(76,175,80); btn.Text="啟動"; btn.TextSize=12; btn.Font=Enum.Font.GothamBold; btn.TextColor3=Color3.fromRGB(255,255,255); btn.Parent=frame; Instance.new("UICorner",btn).CornerRadius=UDim.new(0,5)
+    return frame, input, btn
+end
+
+local function toggleUIState(btn, frame, input, isActive)
+    if isActive then
+        btn.Text="解除"; btn.BackgroundColor3=Color3.fromRGB(244,67,54)
+        frame.BackgroundColor3=Color3.fromRGB(227,242,253)
+        if input and input:IsA("TextBox") then input.TextEditable=false end
+    else
+        btn.Text="啟動"; btn.BackgroundColor3=Color3.fromRGB(76,175,80)
+        frame.BackgroundColor3=Color3.fromRGB(248,249,250)
+        if input and input:IsA("TextBox") then input.TextEditable=true end
+    end
+end
+
+-- ══════════════════════════════════════════
+-- 頁面1：基礎移動 + Slap Aura
+-- ══════════════════════════════════════════
+local speedFrame,speedInput,speedButton = createControlRow(page1,"速度:","25","25",true,1)
+local jumpFrame,jumpInput,jumpButton = createControlRow(page1,"跳躍:","75","75",true,2)
+local gravFrame,gravInput,gravButton = createControlRow(page1,"重力:","50","50",true,3)
+
+-- 分隔線標題
+local sep1 = Instance.new("TextLabel")
+sep1.Size=UDim2.new(1,0,0,20); sep1.BackgroundColor3=Color3.fromRGB(80,50,140)
+sep1.Text="⚔ Slap Aura"; sep1.TextSize=11; sep1.Font=Enum.Font.GothamBold
+sep1.TextColor3=Color3.fromRGB(255,255,255); sep1.LayoutOrder=4; sep1.Parent=page1
+Instance.new("UICorner",sep1).CornerRadius=UDim.new(0,4)
+
+-- Aura 範圍
+local auraRangeFrame=Instance.new("Frame"); auraRangeFrame.Size=UDim2.new(1,0,0,32); auraRangeFrame.BackgroundColor3=Color3.fromRGB(248,249,250); auraRangeFrame.LayoutOrder=5; auraRangeFrame.Parent=page1; Instance.new("UICorner",auraRangeFrame).CornerRadius=UDim.new(0,6)
+local auraRangeLabel=Instance.new("TextLabel"); auraRangeLabel.Text="攻擊範圍:"; auraRangeLabel.Size=UDim2.new(0,80,1,0); auraRangeLabel.Position=UDim2.new(0,6,0,0); auraRangeLabel.BackgroundTransparency=1; auraRangeLabel.Font=Enum.Font.GothamBold; auraRangeLabel.TextSize=12; auraRangeLabel.TextColor3=Color3.fromRGB(85,85,85); auraRangeLabel.TextXAlignment=Enum.TextXAlignment.Left; auraRangeLabel.Parent=auraRangeFrame
+local auraRangeInput=Instance.new("TextBox"); auraRangeInput.Text="17"; auraRangeInput.PlaceholderText="預設17"; auraRangeInput.Size=UDim2.new(0,60,0,22); auraRangeInput.Position=UDim2.new(0,84,0,5); auraRangeInput.BackgroundColor3=Color3.fromRGB(255,255,255); auraRangeInput.TextColor3=Color3.fromRGB(50,50,50); auraRangeInput.Font=Enum.Font.Gotham; auraRangeInput.TextSize=13; auraRangeInput.BorderSizePixel=1; auraRangeInput.BorderColor3=Color3.fromRGB(221,221,221); auraRangeInput.Parent=auraRangeFrame; Instance.new("UICorner",auraRangeInput).CornerRadius=UDim.new(0,5)
+
+-- Aura 開關
+local auraStatusFrame=Instance.new("Frame"); auraStatusFrame.Size=UDim2.new(1,0,0,32); auraStatusFrame.BackgroundColor3=Color3.fromRGB(248,249,250); auraStatusFrame.LayoutOrder=6; auraStatusFrame.Parent=page1; Instance.new("UICorner",auraStatusFrame).CornerRadius=UDim.new(0,6)
+local auraStatusLabel=Instance.new("TextLabel"); auraStatusLabel.Text="Slap Aura:"; auraStatusLabel.Size=UDim2.new(0,80,1,0); auraStatusLabel.Position=UDim2.new(0,6,0,0); auraStatusLabel.BackgroundTransparency=1; auraStatusLabel.Font=Enum.Font.GothamBold; auraStatusLabel.TextSize=12; auraStatusLabel.TextColor3=Color3.fromRGB(85,85,85); auraStatusLabel.TextXAlignment=Enum.TextXAlignment.Left; auraStatusLabel.Parent=auraStatusFrame
+local auraStateText=Instance.new("TextLabel"); auraStateText.Text="關閉"; auraStateText.Size=UDim2.new(0,55,0,22); auraStateText.Position=UDim2.new(0,86,0,5); auraStateText.BackgroundTransparency=1; auraStateText.Font=Enum.Font.Gotham; auraStateText.TextSize=12; auraStateText.TextColor3=Color3.fromRGB(150,150,150); auraStateText.Parent=auraStatusFrame
+local auraToggleBtn=Instance.new("TextButton"); auraToggleBtn.Text="啟動"; auraToggleBtn.Size=UDim2.new(0,50,0,22); auraToggleBtn.Position=UDim2.new(1,-54,0,5); auraToggleBtn.BackgroundColor3=Color3.fromRGB(76,175,80); auraToggleBtn.TextColor3=Color3.fromRGB(255,255,255); auraToggleBtn.Font=Enum.Font.GothamBold; auraToggleBtn.TextSize=12; auraToggleBtn.Parent=auraStatusFrame; Instance.new("UICorner",auraToggleBtn).CornerRadius=UDim.new(0,5)
+
+-- Plague 感染人數顯示
+local plagueCountFrame=Instance.new("Frame"); plagueCountFrame.Size=UDim2.new(1,0,0,28); plagueCountFrame.BackgroundColor3=Color3.fromRGB(30,30,30); plagueCountFrame.LayoutOrder=7; plagueCountFrame.Parent=page1; Instance.new("UICorner",plagueCountFrame).CornerRadius=UDim.new(0,6)
+local plagueCountLabel=Instance.new("TextLabel"); plagueCountLabel.Size=UDim2.new(1,-8,1,0); plagueCountLabel.Position=UDim2.new(0,6,0,0); plagueCountLabel.BackgroundTransparency=1; plagueCountLabel.Text="☣ PlagueFolder：偵測中..."; plagueCountLabel.TextSize=11; plagueCountLabel.Font=Enum.Font.Gotham; plagueCountLabel.TextColor3=Color3.fromRGB(200,200,200); plagueCountLabel.TextXAlignment=Enum.TextXAlignment.Left; plagueCountLabel.TextWrapped=true; plagueCountLabel.Parent=plagueCountFrame
+
+-- ══════════════════════════════════════════
+-- 頁面2：視野燈光
+-- ══════════════════════════════════════════
+local fullbrightFrame,fullbrightInput,fullbrightButton=createControlRow(page2,"全亮:","0.8","0.8",true,1)
+local cameraDistFrame,cameraDistInput,cameraDistButton=createControlRow(page2,"鏡頭距離:","125","125",true,2)
+
+local fixCamFrame=Instance.new("Frame"); fixCamFrame.Size=UDim2.new(1,0,0,32); fixCamFrame.BackgroundColor3=Color3.fromRGB(248,249,250); fixCamFrame.LayoutOrder=3; fixCamFrame.Parent=page2; Instance.new("UICorner",fixCamFrame).CornerRadius=UDim.new(0,6)
+local fixCamLabel=Instance.new("TextLabel"); fixCamLabel.Size=UDim2.new(0,95,1,0); fixCamLabel.Position=UDim2.new(0,6,0,0); fixCamLabel.BackgroundTransparency=1; fixCamLabel.Text="修復鏡頭:"; fixCamLabel.TextSize=12; fixCamLabel.Font=Enum.Font.GothamBold; fixCamLabel.TextColor3=Color3.fromRGB(85,85,85); fixCamLabel.TextXAlignment=Enum.TextXAlignment.Left; fixCamLabel.Parent=fixCamFrame
+local fixCamStatusText=Instance.new("TextLabel"); fixCamStatusText.Size=UDim2.new(0,55,0,22); fixCamStatusText.Position=UDim2.new(0,100,0,5); fixCamStatusText.BackgroundTransparency=1; fixCamStatusText.Text="待機"; fixCamStatusText.TextSize=12; fixCamStatusText.Font=Enum.Font.Gotham; fixCamStatusText.TextColor3=Color3.fromRGB(150,150,150); fixCamStatusText.Parent=fixCamFrame
+local fixCamButton=Instance.new("TextButton"); fixCamButton.Size=UDim2.new(0,50,0,22); fixCamButton.Position=UDim2.new(1,-54,0,5); fixCamButton.BackgroundColor3=Color3.fromRGB(33,150,243); fixCamButton.Text="修復"; fixCamButton.TextSize=12; fixCamButton.Font=Enum.Font.GothamBold; fixCamButton.TextColor3=Color3.fromRGB(255,255,255); fixCamButton.Parent=fixCamFrame; Instance.new("UICorner",fixCamButton).CornerRadius=UDim.new(0,5)
+
+local nofogFrame,nofogStatus,nofogButton=createControlRow(page2,"除霧:","","",false,4)
+local noFilterFrame,noFilterStatus,noFilterButton=createControlRow(page2,"無濾鏡:","","",false,5)
+local brightnessFrame,brightnessInput,brightnessButton=createControlRow(page2,"燈光:","2","2",true,6)
+
+-- ══════════════════════════════════════════
+-- 頁面3：鍊金常用藥水
+-- ══════════════════════════════════════════
+local function createAlchemyRow(parent, label, order, ingredients)
+    local frame=Instance.new("Frame"); frame.Size=UDim2.new(1,0,0,32); frame.BackgroundColor3=Color3.fromRGB(248,249,250); frame.LayoutOrder=order; frame.Parent=parent; Instance.new("UICorner",frame).CornerRadius=UDim.new(0,6)
+    local lbl=Instance.new("TextLabel"); lbl.Size=UDim2.new(0,105,1,0); lbl.Position=UDim2.new(0,6,0,0); lbl.BackgroundTransparency=1; lbl.Text=label; lbl.TextSize=12; lbl.Font=Enum.Font.GothamBold; lbl.TextColor3=Color3.fromRGB(85,85,85); lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.Parent=frame
+    local countBox=Instance.new("TextBox"); countBox.Size=UDim2.new(0,40,0,22); countBox.Position=UDim2.new(0,108,0,5); countBox.Text="1"; countBox.BackgroundColor3=Color3.fromRGB(255,255,255); countBox.TextColor3=Color3.fromRGB(50,50,50); countBox.Font=Enum.Font.Gotham; countBox.TextSize=13; countBox.ClearTextOnFocus=false; countBox.BorderSizePixel=1; countBox.BorderColor3=Color3.fromRGB(221,221,221); countBox.Parent=frame; Instance.new("UICorner",countBox).CornerRadius=UDim.new(0,5)
+    local btn=Instance.new("TextButton"); btn.Size=UDim2.new(0,50,0,22); btn.Position=UDim2.new(1,-54,0,5); btn.BackgroundColor3=Color3.fromRGB(80,50,140); btn.Text="煉製"; btn.TextSize=12; btn.Font=Enum.Font.GothamBold; btn.TextColor3=Color3.fromRGB(255,255,255); btn.Parent=frame; Instance.new("UICorner",btn).CornerRadius=UDim.new(0,5)
+    btn.MouseButton1Click:Connect(function()
+        local count=tonumber(countBox.Text) or 1
+        for i=1,count do G.potion(ingredients) end
+    end)
+    return frame
+end
+
+createAlchemyRow(page3,"惡夢藥",1,{"Dark Root","Dark Root","Dark Root"})
+createAlchemyRow(page3,"麻痹藥",2,{"Plane Flower","Plane Flower"})
+createAlchemyRow(page3,"困惑藥",3,{"Blue Crystal","Red Crystal","Glowing Mushroom"})
+createAlchemyRow(page3,"爆炸藥",4,{"Red Crystal","Fire Flower","Fire Flower"})
+createAlchemyRow(page3,"冰凍藥",5,{"Winter Rose","Winter Rose","Blue Crystal","Glowing Mushroom","Wild Vine"})
+createAlchemyRow(page3,"grug藥",6,{"Mushroom"})
+createAlchemyRow(page3,"力量藥",7,{"Dire Flower","Red Crystal","Wild Vine"})
+createAlchemyRow(page3,"手套速度藥",8,{"Autumn Sprout","Jade Stone"})
+createAlchemyRow(page3,"隱身藥",9,{"Hazel Lily","Hazel Lily","Blue Crystal"})
+createAlchemyRow(page3,"無敵藥",10,{"Mushroom","Mushroom","Elder Wood"})
+createAlchemyRow(page3,"毒藥",11,{"Blood Rose","Dark Root","Dark Root","Red Crystal"})
+createAlchemyRow(page3,"解毒藥",12,{"Plane Flower","Plane Flower","Blue Crystal","Elder Wood","Glowing Mushroom"})
+createAlchemyRow(page3,"輕盈藥",13,{"Hazel Lily","Mushroom"})
+createAlchemyRow(page3,"玩家速度藥",14,{"Mushroom","Mushroom","Blue Crystal","Hazel Lily","Plane Flower"})
+createAlchemyRow(page3,"秒殺藥",15,{"Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root"})
+createAlchemyRow(page3,"緩慢藥",16,{"Blue Crystal","Mushroom","Blue Crystal","Jade Stone","Plane Flower","Mushroom"})
+
+-- ══════════════════════════════════════════
+-- 頁面4：傳送用藥水
+-- ══════════════════════════════════════════
+createAlchemyRow(page4,"藤蔓",1,{"Wild Vine","Wild Vine","Wild Vine","Jade Stone","Blood Rose","Dark Root","Elder Wood"})
+createAlchemyRow(page4,"鎌刀",2,{"Plane Flower","Plane Flower","Hazel Lily"})
+createAlchemyRow(page4,"鎖鏈",3,{"Red Crystal","Blue Crystal","Elder Wood","Elder Wood","Elder Wood"})
+
+-- 特殊區標題
+local sepSpecial = Instance.new("TextLabel")
+sepSpecial.Size=UDim2.new(1,0,0,20); sepSpecial.BackgroundColor3=Color3.fromRGB(140,80,20)
+sepSpecial.Text="✨ 特殊區"; sepSpecial.TextSize=11; sepSpecial.Font=Enum.Font.GothamBold
+sepSpecial.TextColor3=Color3.fromRGB(255,255,255); sepSpecial.LayoutOrder=4; sepSpecial.Parent=page4
+Instance.new("UICorner",sepSpecial).CornerRadius=UDim.new(0,4)
+
+-- 所有藥水定義（鍊金常用16個 + 傳送3個）
+local allPotionsList = {
+    {"Dark Root","Dark Root","Dark Root"},
+    {"Plane Flower","Plane Flower"},
+    {"Blue Crystal","Red Crystal","Glowing Mushroom"},
+    {"Red Crystal","Fire Flower","Fire Flower"},
+    {"Winter Rose","Winter Rose","Blue Crystal","Glowing Mushroom","Wild Vine"},
+    {"Mushroom"},
+    {"Dire Flower","Red Crystal","Wild Vine"},
+    {"Autumn Sprout","Jade Stone"},
+    {"Hazel Lily","Hazel Lily","Blue Crystal"},
+    {"Mushroom","Mushroom","Elder Wood"},
+    {"Blood Rose","Dark Root","Dark Root","Red Crystal"},
+    {"Plane Flower","Plane Flower","Blue Crystal","Elder Wood","Glowing Mushroom"},
+    {"Hazel Lily","Mushroom"},
+    {"Mushroom","Mushroom","Blue Crystal","Hazel Lily","Plane Flower"},
+    {"Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root"},
+    {"Blue Crystal","Mushroom","Blue Crystal","Jade Stone","Plane Flower","Mushroom"},
+    {"Wild Vine","Wild Vine","Wild Vine","Jade Stone","Blood Rose","Dark Root","Elder Wood"},
+    {"Plane Flower","Plane Flower","Hazel Lily"},
+    {"Red Crystal","Blue Crystal","Elder Wood","Elder Wood","Elder Wood"},
+}
+
+-- 水手套按鈕
+local waterGloveFrame=Instance.new("Frame"); waterGloveFrame.Size=UDim2.new(1,0,0,32); waterGloveFrame.BackgroundColor3=Color3.fromRGB(248,249,250); waterGloveFrame.LayoutOrder=5; waterGloveFrame.Parent=page4; Instance.new("UICorner",waterGloveFrame).CornerRadius=UDim.new(0,6)
+local waterGloveLabel=Instance.new("TextLabel"); waterGloveLabel.Text="💧 水手套:"; waterGloveLabel.Size=UDim2.new(0,100,1,0); waterGloveLabel.Position=UDim2.new(0,6,0,0); waterGloveLabel.BackgroundTransparency=1; waterGloveLabel.Font=Enum.Font.GothamBold; waterGloveLabel.TextSize=12; waterGloveLabel.TextColor3=Color3.fromRGB(85,85,85); waterGloveLabel.TextXAlignment=Enum.TextXAlignment.Left; waterGloveLabel.Parent=waterGloveFrame
+local waterGloveCountBox=Instance.new("TextBox"); waterGloveCountBox.Size=UDim2.new(0,40,0,22); waterGloveCountBox.Position=UDim2.new(0,104,0,5); waterGloveCountBox.Text="1"; waterGloveCountBox.BackgroundColor3=Color3.fromRGB(255,255,255); waterGloveCountBox.TextColor3=Color3.fromRGB(50,50,50); waterGloveCountBox.Font=Enum.Font.Gotham; waterGloveCountBox.TextSize=13; waterGloveCountBox.ClearTextOnFocus=false; waterGloveCountBox.BorderSizePixel=1; waterGloveCountBox.BorderColor3=Color3.fromRGB(221,221,221); waterGloveCountBox.Parent=waterGloveFrame; Instance.new("UICorner",waterGloveCountBox).CornerRadius=UDim.new(0,5)
+local waterGloveBtn=Instance.new("TextButton"); waterGloveBtn.Size=UDim2.new(0,50,0,22); waterGloveBtn.Position=UDim2.new(1,-54,0,5); waterGloveBtn.BackgroundColor3=Color3.fromRGB(30,100,200); waterGloveBtn.Text="執行"; waterGloveBtn.TextSize=12; waterGloveBtn.Font=Enum.Font.GothamBold; waterGloveBtn.TextColor3=Color3.fromRGB(255,255,255); waterGloveBtn.Parent=waterGloveFrame; Instance.new("UICorner",waterGloveBtn).CornerRadius=UDim.new(0,5)
+waterGloveBtn.MouseButton1Click:Connect(function()
+    local count=tonumber(waterGloveCountBox.Text) or 1
+    for i=1,count do
+        for _, ingredients in ipairs(allPotionsList) do
+            G.potion(ingredients)
+        end
+    end
+end)
+
+-- 麵粉按鈕
+local flourFrame=Instance.new("Frame"); flourFrame.Size=UDim2.new(1,0,0,32); flourFrame.BackgroundColor3=Color3.fromRGB(248,249,250); flourFrame.LayoutOrder=6; flourFrame.Parent=page4; Instance.new("UICorner",flourFrame).CornerRadius=UDim.new(0,6)
+local flourLabel=Instance.new("TextLabel"); flourLabel.Text="🌾 麵粉:"; flourLabel.Size=UDim2.new(0,100,1,0); flourLabel.Position=UDim2.new(0,6,0,0); flourLabel.BackgroundTransparency=1; flourLabel.Font=Enum.Font.GothamBold; flourLabel.TextSize=12; flourLabel.TextColor3=Color3.fromRGB(85,85,85); flourLabel.TextXAlignment=Enum.TextXAlignment.Left; flourLabel.Parent=flourFrame
+local flourCountBox=Instance.new("TextBox"); flourCountBox.Size=UDim2.new(0,40,0,22); flourCountBox.Position=UDim2.new(0,104,0,5); flourCountBox.Text="1"; flourCountBox.BackgroundColor3=Color3.fromRGB(255,255,255); flourCountBox.TextColor3=Color3.fromRGB(50,50,50); flourCountBox.Font=Enum.Font.Gotham; flourCountBox.TextSize=13; flourCountBox.ClearTextOnFocus=false; flourCountBox.BorderSizePixel=1; flourCountBox.BorderColor3=Color3.fromRGB(221,221,221); flourCountBox.Parent=flourFrame; Instance.new("UICorner",flourCountBox).CornerRadius=UDim.new(0,5)
+local flourBtn=Instance.new("TextButton"); flourBtn.Size=UDim2.new(0,50,0,22); flourBtn.Position=UDim2.new(1,-54,0,5); flourBtn.BackgroundColor3=Color3.fromRGB(180,140,60); flourBtn.Text="執行"; flourBtn.TextSize=12; flourBtn.Font=Enum.Font.GothamBold; flourBtn.TextColor3=Color3.fromRGB(255,255,255); flourBtn.Parent=flourFrame; Instance.new("UICorner",flourBtn).CornerRadius=UDim.new(0,5)
+flourBtn.MouseButton1Click:Connect(function()
+    local count=tonumber(flourCountBox.Text) or 1
+    local AlchemistEvent=game:GetService("ReplicatedStorage"):WaitForChild("AlchemistEvent")
+    for i=1,count do
+        AlchemistEvent:FireServer("AddItem","Cake Mix")
+    end
+end)
+
+-- ══════════════════════════════════════════
+-- 功能邏輯
+-- ══════════════════════════════════════════
+local function updateStatus()
+    local active={}
+    if toggles.speed then table.insert(active,"速度") end
+    if toggles.fullbright then table.insert(active,"全亮") end
+    if toggles.noFilter then table.insert(active,"無濾鏡") end
+    if auraEnabled then table.insert(active,"Aura") end
+    if fixCamEnabled then table.insert(active,"修復鏡頭") end
+    if #active > 0 then
+        statusLabel.Text="✅ "..table.concat(active," | ")
+        statusLabel.BackgroundColor3=Color3.fromRGB(232,245,233); statusLabel.TextColor3=Color3.fromRGB(46,125,50)
+    else
+        statusLabel.Text="系統就緒"
+        statusLabel.BackgroundColor3=Color3.fromRGB(255,235,238); statusLabel.TextColor3=Color3.fromRGB(198,40,40)
+    end
+end
+
+-- 速度
+speedButton.MouseButton1Click:Connect(function()
+    toggles.speed=not toggles.speed
+    if toggles.speed then if not hasOriginalValues then getOriginalValues() end; values.speed=tonumber(speedInput.Text) or 25; applySpeed()
+    else applySpeed() end
+    toggleUIState(speedButton,speedFrame,speedInput,toggles.speed)
+    updateStatus()
+end)
+
+-- 跳躍
+jumpButton.MouseButton1Click:Connect(function()
+    toggles.jump=not toggles.jump
+    if toggles.jump then if not hasOriginalValues then getOriginalValues() end; values.jump=tonumber(jumpInput.Text) or 75; applyJump()
+    else applyJump() end
+    toggleUIState(jumpButton,jumpFrame,jumpInput,toggles.jump)
+    updateStatus()
+end)
+
+-- 重力
+gravButton.MouseButton1Click:Connect(function()
+    toggles.gravity=not toggles.gravity
+    if toggles.gravity then
+        if not hasOriginalValues then getOriginalValues() end
+        values.gravity=tonumber(gravInput.Text) or 50; Workspace.Gravity=values.gravity
+        if connections.gravity then connections.gravity:Disconnect() end
+        connections.gravity=Workspace:GetPropertyChangedSignal("Gravity"):Connect(function() if toggles.gravity then Workspace.Gravity=values.gravity end end)
+    else
+        Workspace.Gravity=originalGravity
+        if connections.gravity then connections.gravity:Disconnect() end
+    end
+    toggleUIState(gravButton,gravFrame,gravInput,toggles.gravity)
+    updateStatus()
+end)
+
+-- 全亮
+fullbrightButton.MouseButton1Click:Connect(function()
+    toggles.fullbright=not toggles.fullbright
+    if toggles.fullbright then local v=tonumber(fullbrightInput.Text) or 0.8; values.fullbright=math.clamp(v,0,99); if v~=values.fullbright then fullbrightInput.Text=tostring(values.fullbright) end end
+    updateLighting(); toggleUIState(fullbrightButton,fullbrightFrame,fullbrightInput,toggles.fullbright)
+    updateStatus()
+end)
+
+-- 燈光
+brightnessButton.MouseButton1Click:Connect(function()
+    toggles.brightness=not toggles.brightness
+    if toggles.brightness then values.brightness=tonumber(brightnessInput.Text) or 2 end
+    updateLighting(); toggleUIState(brightnessButton,brightnessFrame,brightnessInput,toggles.brightness)
+    updateStatus()
+end)
+
+-- 修復鏡頭
+fixCamButton.MouseButton1Click:Connect(function()
+    fixCamEnabled = true; applyFixCamera()
+    if not fixCamConn then startFixCamGuard() end
+    fixCamButton.BackgroundColor3=Color3.fromRGB(46,125,50)
+    fixCamStatusText.Text="已修復"; fixCamStatusText.TextColor3=Color3.fromRGB(46,125,50)
+    fixCamFrame.BackgroundColor3=Color3.fromRGB(232,245,233)
+    task.delay(1.5, function()
+        if fixCamButton and fixCamButton.Parent then
+            fixCamButton.BackgroundColor3=Color3.fromRGB(33,150,243)
+            fixCamStatusText.Text="守護中"; fixCamStatusText.TextColor3=Color3.fromRGB(33,150,243)
+        end
+    end)
+    updateStatus()
+end)
+
+-- 無濾鏡
+noFilterButton.MouseButton1Click:Connect(function()
+    toggles.noFilter=not toggles.noFilter
+    if toggles.noFilter then
+        noFilterStatus.Text="開啟"; noFilterStatus.TextColor3=Color3.fromRGB(46,125,50)
+        backupPostEffects()
+        if connections.noFilter then connections.noFilter:Disconnect() end
+        connections.noFilter=RunService.RenderStepped:Connect(function()
+            for _,v in pairs(Lighting:GetChildren()) do
+                if v:IsA("BloomEffect") then v.Intensity=0;v.Size=0;v.Threshold=2
+                elseif v:IsA("BlurEffect") then v.Size=0
+                elseif v:IsA("ColorCorrectionEffect") then v.Brightness=0;v.Contrast=0;v.Saturation=0;v.TintColor=Color3.fromRGB(255,255,255)
+                elseif v:IsA("SunRaysEffect") then v.Intensity=0;v.Spread=0
+                elseif v:IsA("DepthOfFieldEffect") then v.FarIntensity=0;v.NearIntensity=0 end
+            end
+            if Workspace.CurrentCamera then
+                for _,v in pairs(Workspace.CurrentCamera:GetChildren()) do
+                    if v:IsA("BloomEffect") then v.Intensity=0;v.Size=0;v.Threshold=2
+                    elseif v:IsA("BlurEffect") then v.Size=0
+                    elseif v:IsA("ColorCorrectionEffect") then v.Brightness=0;v.Contrast=0;v.Saturation=0;v.TintColor=Color3.fromRGB(255,255,255)
+                    elseif v:IsA("SunRaysEffect") then v.Intensity=0;v.Spread=0
+                    elseif v:IsA("DepthOfFieldEffect") then v.FarIntensity=0;v.NearIntensity=0 end
+                end
+            end
+        end)
+    else
+        noFilterStatus.Text="關閉"; noFilterStatus.TextColor3=Color3.fromRGB(150,150,150)
+        if connections.noFilter then connections.noFilter:Disconnect() end
+        for effect,backup in pairs(postEffectBackups) do if effect and effect.Parent then for prop,value in pairs(backup) do pcall(function() effect[prop]=value end) end end end
+        postEffectBackups={}
+    end
+    toggleUIState(noFilterButton,noFilterFrame,noFilterStatus,toggles.noFilter)
+    updateStatus()
+end)
+
+-- 除霧
+nofogButton.MouseButton1Click:Connect(function()
+    toggles.nofog=not toggles.nofog
+    if toggles.nofog then
+        nofogStatus.Text="開啟"; nofogStatus.TextColor3=Color3.fromRGB(46,125,50)
+        backupAtmospheres()
+        if connections.nofog then connections.nofog:Disconnect() end
+        connections.nofog=RunService.RenderStepped:Connect(function()
+            Lighting.FogEnd=100000
+            for _,v in pairs(Lighting:GetDescendants()) do if v:IsA("Atmosphere") then v.Density=0;v.Offset=0;v.Glare=0;v.Haze=0 end end
+        end)
+    else
+        nofogStatus.Text="關閉"; nofogStatus.TextColor3=Color3.fromRGB(150,150,150)
+        if connections.nofog then connections.nofog:Disconnect() end
+        Lighting.FogEnd=trueLightingBackup.FogEnd or 100000
+        for atm,backup in pairs(atmosphereBackups) do if atm and atm.Parent then for prop,value in pairs(backup) do pcall(function() atm[prop]=value end) end end end
+        atmosphereBackups={}
+    end
+    toggleUIState(nofogButton,nofogFrame,nofogStatus,toggles.nofog)
+    updateStatus()
+end)
+
+-- 鏡頭距離
+cameraDistButton.MouseButton1Click:Connect(function()
+    toggles.cameraDist=not toggles.cameraDist
+    if toggles.cameraDist then
+        values.cameraDist=tonumber(cameraDistInput.Text) or 125
+        player.CameraMaxZoomDistance=values.cameraDist; player.CameraMinZoomDistance=values.cameraDist
+        if player.Character then local hum=player.Character:FindFirstChildOfClass("Humanoid"); if hum then hum.CameraOffset=Vector3.new(0,0,0) end end
+        task.delay(0.1,function() if toggles.cameraDist then player.CameraMinZoomDistance=0.5 end end)
+        if connections.camDistGuard then connections.camDistGuard:Disconnect() end
+        connections.camDistGuard = RunService.Heartbeat:Connect(function()
+            if not toggles.cameraDist then
+                if connections.camDistGuard then connections.camDistGuard:Disconnect(); connections.camDistGuard=nil end
+                return
+            end
+            if player.CameraMode == Enum.CameraMode.LockFirstPerson then
+                player.CameraMode = Enum.CameraMode.Classic
+                player.CameraMinZoomDistance = 0.5; player.CameraMaxZoomDistance = values.cameraDist
+            end
+        end)
+    else
+        player.CameraMaxZoomDistance=128; player.CameraMinZoomDistance=0.5
+        if connections.camDistGuard then connections.camDistGuard:Disconnect(); connections.camDistGuard=nil end
+    end
+    toggleUIState(cameraDistButton,cameraDistFrame,cameraDistInput,toggles.cameraDist)
+    updateStatus()
+end)
+
+-- ══════════════════════════════════════════
+-- Slap Aura 邏輯（PlagueHit）
+-- ══════════════════════════════════════════
+
+-- 儲存 ESP 相關的參照（供後面 ESP 模組更新顏色）
+local _espLabelsRef = nil  -- 由 ESP 模組設定
+local _espBoxesRef  = nil
+
+local function getPlayersInPlagueFolder()
+    local count = 0
+    local names = {}
+    local myChar = player.Character
+    if not myChar then return 0, {} end
+    local plagueFolder = myChar:FindFirstChild("PlagueFolder")
+    if not plagueFolder then return 0, {} end
+    for _, child in pairs(plagueFolder:GetChildren()) do
+        -- 子物件名稱為玩家名
+        if Players:FindFirstChild(child.Name) then
+            count = count + 1
+            table.insert(names, child.Name)
+        end
+    end
+    return count, names
+end
+
+local function getNearestPlayerInRange(range)
+    local myChar = player.Character
+    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return nil end
+    local myPos = myChar.HumanoidRootPart.Position
+    local nearest, nearestDist = nil, math.huge
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local dist=(p.Character.HumanoidRootPart.Position - myPos).Magnitude
+            if dist <= range and dist < nearestDist then nearest=p; nearestDist=dist end
+        end
+    end
+    return nearest
+end
+
+local function fireAuraOnTarget(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then return end
+    local leftArm = targetPlayer.Character:FindFirstChild("Left Arm")
+    if not leftArm then leftArm = targetPlayer.Character:FindFirstChild("LeftHand") end
+    if leftArm then
+        pcall(function()
+            ReplicatedStorage.PlagueHit:FireServer(leftArm)
+        end)
+    end
+end
+
+local function fireAuraNearestInRange()
+    local myChar = player.Character
+    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return end
+    local myPos = myChar.HumanoidRootPart.Position
+    local nearest, nearestDist = nil, math.huge
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local dist = (p.Character.HumanoidRootPart.Position - myPos).Magnitude
+            if dist <= values.auraRange and dist < nearestDist then
+                nearest = p; nearestDist = dist
+            end
+        end
+    end
+    if nearest then fireAuraOnTarget(nearest) end
+end
+
+-- Aura 點擊觸發（Mouse.Button1Down 每次點擊觸發，1秒冷卻）
+local auraMouseConn = nil
+
+local function startAuraClickListener()
+    if auraMouseConn then auraMouseConn:Disconnect() end
+    local mouse = player:GetMouse()
+    auraMouseConn = mouse.Button1Down:Connect(function()
+        if not auraEnabled then return end
+        local now = tick()
+        if now - auraLastFire < 1 then return end  -- 1秒冷卻
+        auraLastFire = now
+        fireAuraNearestInRange()
+    end)
+end
+
+local function stopAuraClickListener()
+    if auraMouseConn then auraMouseConn:Disconnect(); auraMouseConn = nil end
+end
+
+-- 持續更新 PlagueFolder 人數 + 更新 ESP 顏色
+RunService.Heartbeat:Connect(function()
+    if not auraEnabled then
+        plagueCountLabel.Text = "☣ PlagueFolder：未啟動"
+        plagueCountLabel.TextColor3 = Color3.fromRGB(150,150,150)
+        return
+    end
+    local count, names = getPlayersInPlagueFolder()
+    if count > 0 then
+        plagueCountLabel.Text = "☣ 感染中："..count.."人 ("..table.concat(names,", ")..")"
+        plagueCountLabel.TextColor3 = Color3.fromRGB(100,255,100)
+        plagueCountFrame.BackgroundColor3 = Color3.fromRGB(20,50,20)
+    else
+        plagueCountLabel.Text = "☣ PlagueFolder：0人感染"
+        plagueCountLabel.TextColor3 = Color3.fromRGB(200,200,200)
+        plagueCountFrame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+    end
+
+    -- 更新 ESP 顏色
+    if _espLabelsRef and _espBoxesRef then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= player then
+                local inPlague = false
+                for _, n in ipairs(names) do
+                    if n == p.Name then inPlague=true; break end
+                end
+                local col = inPlague and Color3.fromRGB(0,255,80) or Color3.fromRGB(255,255,255)
+                if _espLabelsRef[p] and _espLabelsRef[p].label then
+                    _espLabelsRef[p].label.TextColor3 = col
+                end
+                if _espBoxesRef[p] then
+                    _espBoxesRef[p].Color3 = col
+                end
+            end
+        end
+    end
+end)
+
+-- Aura 開關按鈕
+auraToggleBtn.MouseButton1Click:Connect(function()
+    auraEnabled = not auraEnabled
+    if auraEnabled then
+        auraToggleBtn.Text="解除"; auraToggleBtn.BackgroundColor3=Color3.fromRGB(244,67,54)
+        auraStateText.Text="開啟"; auraStateText.TextColor3=Color3.fromRGB(46,125,50)
+        auraStatusFrame.BackgroundColor3=Color3.fromRGB(227,242,253)
+        values.auraRange = tonumber(auraRangeInput.Text) or 17
+        auraLastFire = 0
+        startAuraClickListener()
+    else
+        auraToggleBtn.Text="啟動"; auraToggleBtn.BackgroundColor3=Color3.fromRGB(76,175,80)
+        auraStateText.Text="關閉"; auraStateText.TextColor3=Color3.fromRGB(150,150,150)
+        auraStatusFrame.BackgroundColor3=Color3.fromRGB(248,249,250)
+        stopAuraClickListener()
+    end
+    updateStatus()
+end)
+
+-- ══════════════════════════════════════════
+-- 拖曳功能
+-- ══════════════════════════════════════════
+local function enableDrag(frame, dragHandle)
+    local dragging=false; local dragInput,dragStart,startPos
+    local function update(input)
+        local delta=input.Position-dragStart
+        frame.Position=UDim2.new(startPos.X.Scale,startPos.X.Offset+delta.X,startPos.Y.Scale,startPos.Y.Offset+delta.Y)
+    end
+    dragHandle.InputBegan:Connect(function(input)
+        if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
+            dragging=true; dragStart=input.Position; startPos=frame.Position
+            input.Changed:Connect(function() if input.UserInputState==Enum.UserInputState.End then dragging=false end end)
+        end
+    end)
+    dragHandle.InputChanged:Connect(function(input)
+        if input.UserInputType==Enum.UserInputType.MouseMovement or input.UserInputType==Enum.UserInputType.Touch then dragInput=input end
+    end)
+    UserInputService.InputChanged:Connect(function(input) if input==dragInput and dragging then update(input) end end)
+end
+enableDrag(mainFrame, titleBar)
+
+-- 縮小/展開
+local miniFrame=Instance.new("Frame"); miniFrame.Size=UDim2.new(0,160,0,32); miniFrame.Position=UDim2.new(0.5,-80,0,30); miniFrame.BackgroundColor3=Color3.fromRGB(80,50,140); miniFrame.Visible=false; miniFrame.Parent=screenGui; Instance.new("UICorner",miniFrame).CornerRadius=UDim.new(0,6)
+local miniTitle=Instance.new("TextLabel"); miniTitle.Text="🧪 鍊金手套"; miniTitle.Size=UDim2.new(1,-36,1,0); miniTitle.BackgroundTransparency=1; miniTitle.Font=Enum.Font.GothamBold; miniTitle.TextSize=14; miniTitle.TextColor3=Color3.fromRGB(255,255,255); miniTitle.Parent=miniFrame
+local expandButton=Instance.new("TextButton"); expandButton.Text="+"; expandButton.Size=UDim2.new(0,24,0,24); expandButton.Position=UDim2.new(1,-28,0,4); expandButton.BackgroundColor3=Color3.fromRGB(76,175,80); expandButton.TextColor3=Color3.fromRGB(255,255,255); expandButton.Parent=miniFrame; Instance.new("UICorner",expandButton).CornerRadius=UDim.new(0,5)
+enableDrag(miniFrame, miniFrame)
+
+minimizeButton.MouseButton1Click:Connect(function() mainFrame.Visible=false; miniFrame.Visible=true end)
+expandButton.MouseButton1Click:Connect(function() miniFrame.Visible=false; mainFrame.Visible=true end)
+
+closeButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+    stopAuraClickListener()
+    for _, v in pairs(connections) do if v then v:Disconnect() end end
+    if fixCamConn then fixCamConn:Disconnect() end
+    Lighting.Ambient=trueLightingBackup.Ambient; Lighting.Brightness=trueLightingBackup.Brightness
+    Lighting.OutdoorAmbient=trueLightingBackup.OutdoorAmbient
+    Lighting.ColorShift_Top=trueLightingBackup.ColorShift_Top; Lighting.ColorShift_Bottom=trueLightingBackup.ColorShift_Bottom
+    Lighting.FogEnd=trueLightingBackup.FogEnd
+    for effect,backup in pairs(postEffectBackups) do if effect and effect.Parent then for prop,value in pairs(backup) do pcall(function() effect[prop]=value end) end end end
+    for atm,backup in pairs(atmosphereBackups) do if atm and atm.Parent then for prop,value in pairs(backup) do pcall(function() atm[prop]=value end) end end end
+    player.CameraMinZoomDistance=0.5; player.CameraMaxZoomDistance=128
+    player.CameraMode=Enum.CameraMode.Classic
+    local char=player.Character
+    if char then
+        local hum=char:FindFirstChildOfClass("Humanoid")
+        if hum then hum.WalkSpeed=originalSpeed; if hum.UseJumpPower then hum.JumpPower=originalJump else hum.JumpHeight=originalJump end end
+    end
+end)
+
+task.spawn(function() if player.Character then task.wait(0.1); getOriginalValues() end end)
+
+-- ══════════════════════════════════════════
+-- 面向/ESP 功能（獨立 ScreenGui）
+-- ══════════════════════════════════════════
+task.spawn(function() pcall(function()
+    local ref = cloneref or function(x) return x end
+    local S = function(n) return ref(game:GetService(n)) end
+    local Plrs, Tw, UIS, RS2, Wk, CG =
+        S("Players"), S("TweenService"), S("UserInputService"), S("RunService"), S("Workspace"), S("CoreGui")
+    local plr2 = Plrs.LocalPlayer
+
+    if CG:FindFirstChild("MaolingESPUI") then CG.MaolingESPUI:Destroy() end
+
+    local function parentUI2(g)
+        if gethui then g.Name="\0"..g.Name; g.Parent=gethui()
+        elseif CG then g.Parent=CG
+        else g.Parent=plr2:WaitForChild("PlayerGui") end
+        return g
+    end
+
+    local function getParts()
+        local c=plr2.Character or plr2.CharacterAdded:Wait()
+        local hum=c:FindFirstChildOfClass("Humanoid") or c:WaitForChild("Humanoid")
+        local hrp=c:FindFirstChild("HumanoidRootPart") or c:WaitForChild("HumanoidRootPart")
+        return c, hum, hrp
+    end
+
+    local lockMode = "none"
+    local rotCon = nil
+    local targetPlayer2 = nil
+    local mouseClickConn = nil
+    local lastClickTime = 0
+    local lastClickedPlayer = nil
+
+    local gui2 = Instance.new("ScreenGui")
+    gui2.Name = "MaolingESPUI"; gui2.ResetOnSpawn=false; gui2.IgnoreGuiInset=true
+    parentUI2(gui2)
+
+    local nearBtn, clickBtn, espBtn, centerBtn
+
+    local function updateButtonState(button, active)
+        Tw:Create(button, TweenInfo.new(0.2), {
+            BackgroundColor3 = active and Color3.fromRGB(50,100,150) or Color3.fromRGB(40,40,45)
+        }):Play()
+        local stroke = button:FindFirstChild("BtnStroke")
+        if stroke then
+            Tw:Create(stroke, TweenInfo.new(0.2), {
+                Color = active and Color3.fromRGB(0,200,255) or Color3.fromRGB(80,80,90),
+                Thickness = active and 2 or 1
+            }):Play()
+        end
+    end
+
+    local function clearAllModes()
+        if rotCon then rotCon:Disconnect(); rotCon=nil end
+        if mouseClickConn then mouseClickConn:Disconnect(); mouseClickConn=nil end
+        local _,h,_ = getParts()
+        if h then h.AutoRotate=true end
+        updateButtonState(nearBtn, false)
+        updateButtonState(clickBtn, false)
+        updateButtonState(centerBtn, false)
+        lockMode="none"; targetPlayer2=nil; lastClickedPlayer=nil
+    end
+
+    local function setFaceRotation(type, target)
+        if rotCon then rotCon:Disconnect() end
+        local _,h,_ = getParts(); h.AutoRotate=false
+        rotCon = RS2.RenderStepped:Connect(function()
+            local _,_,myHRP = getParts(); if not myHRP then return end
+            local lookAtPos=nil
+            if type=="nearest" then
+                local nearest, minDist=nil, math.huge
+                for _, p in ipairs(Plrs:GetPlayers()) do
+                    if p~=plr2 and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                        local d=(myHRP.Position-p.Character.HumanoidRootPart.Position).Magnitude
+                        if d<minDist then minDist=d; nearest=p.Character.HumanoidRootPart end
+                    end
+                end
+                if nearest then lookAtPos=nearest.Position end
+            elseif type=="click" and target and target.Character then
+                local pRoot=target.Character:FindFirstChild("HumanoidRootPart")
+                if pRoot then lookAtPos=pRoot.Position end
+            elseif type=="center" then
+                lookAtPos=Vector3.new(0,myHRP.Position.Y,0)
+            end
+            if lookAtPos then
+                local flatDir=(lookAtPos-myHRP.Position)*Vector3.new(1,0,1)
+                if flatDir.Magnitude>0.001 then
+                    myHRP.CFrame=CFrame.lookAt(myHRP.Position,myHRP.Position+flatDir.Unit,Vector3.yAxis)
+                end
+            end
+        end)
+    end
+
+    local panelWidth=80; local btnH=30; local btnGap=3
+    local numBtns=4; local expandedH=numBtns*btnH+(numBtns-1)*btnGap
+    local toggleBtnH=28
+
+    local panel=Instance.new("Frame")
+    panel.Name="AnchorPanel"; panel.AnchorPoint=Vector2.new(1,1)
+    panel.Size=UDim2.fromOffset(panelWidth,toggleBtnH)
+    panel.Position=UDim2.new(1,-36,1,-50)
+    panel.BackgroundTransparency=1; panel.ClipsDescendants=false; panel.Parent=gui2
+
+    local toggleBtn2=Instance.new("TextButton")
+    toggleBtn2.AnchorPoint=Vector2.new(0,1); toggleBtn2.Size=UDim2.fromOffset(panelWidth,toggleBtnH)
+    toggleBtn2.Position=UDim2.new(0,0,1,0); toggleBtn2.BackgroundColor3=Color3.fromRGB(45,45,55)
+    toggleBtn2.Text="面向/ESP ▲"; toggleBtn2.TextSize=11; toggleBtn2.Font=Enum.Font.GothamBold
+    toggleBtn2.TextColor3=Color3.fromRGB(200,200,220); toggleBtn2.AutoButtonColor=false; toggleBtn2.Parent=panel
+    Instance.new("UICorner",toggleBtn2).CornerRadius=UDim.new(0,6)
+
+    local xBtn2=Instance.new("TextButton")
+    xBtn2.Size=UDim2.fromOffset(22,22); xBtn2.AnchorPoint=Vector2.new(0,1)
+    xBtn2.Position=UDim2.new(1,4,1,-3); xBtn2.BackgroundColor3=Color3.fromRGB(200,50,50)
+    xBtn2.Text="x"; xBtn2.TextSize=13; xBtn2.Font=Enum.Font.GothamBold
+    xBtn2.TextColor3=Color3.new(1,1,1); xBtn2.AutoButtonColor=false; xBtn2.Parent=panel
+    Instance.new("UICorner",xBtn2).CornerRadius=UDim.new(0,5)
+
+    local btnContainer2=Instance.new("Frame")
+    btnContainer2.AnchorPoint=Vector2.new(0,1); btnContainer2.Size=UDim2.fromOffset(panelWidth,0)
+    btnContainer2.Position=UDim2.new(0,0,1,-toggleBtnH); btnContainer2.BackgroundTransparency=1
+    btnContainer2.ClipsDescendants=true; btnContainer2.Parent=panel
+
+    local function createExtraBtn2(name, idx)
+        local b=Instance.new("TextButton"); b.Name=name
+        b.Size=UDim2.fromOffset(panelWidth,btnH); b.Position=UDim2.fromOffset(0,(idx-1)*(btnH+btnGap))
+        b.BackgroundColor3=Color3.fromRGB(38,38,48); b.Text=name; b.TextSize=11
+        b.TextColor3=Color3.new(1,1,1); b.AutoButtonColor=false; b.Parent=btnContainer2
+        Instance.new("UICorner",b).CornerRadius=UDim.new(0,6)
+        local s=Instance.new("UIStroke"); s.Thickness=1; s.Color=Color3.fromRGB(70,70,85); s.Name="BtnStroke"; s.Parent=b
+        return b
+    end
+    espBtn    = createExtraBtn2("ESP",     1)
+    nearBtn   = createExtraBtn2("面向最近", 2)
+    clickBtn  = createExtraBtn2("面向雙擊", 3)
+    centerBtn = createExtraBtn2("朝向中央", 4)
+
+    local isExpanded=false
+    local function setExpanded(expand)
+        isExpanded=expand
+        local targetH=expand and expandedH or 0
+        Tw:Create(btnContainer2,TweenInfo.new(0.18,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Size=UDim2.fromOffset(panelWidth,targetH)}):Play()
+        Tw:Create(panel,TweenInfo.new(0.18,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Size=UDim2.fromOffset(panelWidth,toggleBtnH+targetH)}):Play()
+        toggleBtn2.Text=expand and "面向/ESP ▼" or "面向/ESP ▲"
+    end
+
+    local isDragging2=false; local dragMoved2=false; local dragStartPos2=nil; local panelStartPos2=nil
+    toggleBtn2.InputBegan:Connect(function(input)
+        if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
+            isDragging2=true; dragMoved2=false; dragStartPos2=input.Position; panelStartPos2=panel.Position
+            input.Changed:Connect(function() if input.UserInputState==Enum.UserInputState.End then isDragging2=false end end)
+        end
+    end)
+    UIS.InputChanged:Connect(function(input)
+        if isDragging2 and (input.UserInputType==Enum.UserInputType.MouseMovement or input.UserInputType==Enum.UserInputType.Touch) then
+            local delta=input.Position-dragStartPos2
+            if delta.Magnitude>5 then
+                dragMoved2=true
+                panel.Position=UDim2.new(panelStartPos2.X.Scale,panelStartPos2.X.Offset+delta.X,panelStartPos2.Y.Scale,panelStartPos2.Y.Offset+delta.Y)
+            end
+        end
+    end)
+    toggleBtn2.MouseButton1Click:Connect(function() if not dragMoved2 then setExpanded(not isExpanded) end; dragMoved2=false end)
+    UIS.InputEnded:Connect(function(input)
+        if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then isDragging2=false end
+    end)
+
+    nearBtn.MouseButton1Click:Connect(function()
+        if lockMode=="nearest" then clearAllModes() else clearAllModes(); lockMode="nearest"; updateButtonState(nearBtn,true); setFaceRotation("nearest") end
+    end)
+
+    clickBtn.MouseButton1Click:Connect(function()
+        if lockMode=="click" then clearAllModes()
+        else
+            clearAllModes(); lockMode="click"; updateButtonState(clickBtn,true)
+            mouseClickConn=plr2:GetMouse().Button1Down:Connect(function()
+                local mouse=plr2:GetMouse(); local cam=Wk.CurrentCamera
+                local ray=cam:ScreenPointToRay(mouse.X,mouse.Y)
+                local foundPlayer=nil; local minDistance=math.huge
+                for _, p in ipairs(Plrs:GetPlayers()) do
+                    if p~=plr2 and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                        local hrp2=p.Character.HumanoidRootPart
+                        local rayToPlayer=hrp2.Position-ray.Origin
+                        local projection=rayToPlayer:Dot(ray.Direction.Unit)
+                        if projection>0 then
+                            local closestPoint=ray.Origin+ray.Direction.Unit*projection
+                            local distance=(hrp2.Position-closestPoint).Magnitude
+                            if distance<8 and projection<minDistance then minDistance=projection; foundPlayer=p end
+                        end
+                    end
+                end
+                if foundPlayer and foundPlayer~=plr2 then
+                    local now=tick()
+                    if lastClickedPlayer==foundPlayer and (now-lastClickTime)<0.5 then
+                        targetPlayer2=foundPlayer; setFaceRotation("click",foundPlayer)
+                    end
+                    lastClickedPlayer=foundPlayer; lastClickTime=now
+                end
+            end)
+        end
+    end)
+
+    centerBtn.MouseButton1Click:Connect(function()
+        if lockMode=="center" then clearAllModes() else clearAllModes(); lockMode="center"; updateButtonState(centerBtn,true); setFaceRotation("center") end
+    end)
+
+    -- ESP
+    local espEnabled=false
+    local espLabels={}
+    local espBoxes={}
+    local espConn=nil
+
+    local function cleanupESP(p)
+        if espLabels[p] then if espLabels[p].billboard then espLabels[p].billboard:Destroy() end; espLabels[p]=nil end
+        if espBoxes[p] then espBoxes[p]:Destroy(); espBoxes[p]=nil end
+    end
+
+    -- 把 ESP 參照傳給主模組（供 Plague 顏色更新使用）
+    local function syncESPRefs()
+        _espLabelsRef = espLabels
+        _espBoxesRef  = espBoxes
+    end
+
+    espBtn.MouseButton1Click:Connect(function()
+        espEnabled=not espEnabled
+        updateButtonState(espBtn,espEnabled)
+        if not espEnabled then
+            if espConn then espConn:Disconnect(); espConn=nil end
+            for p in pairs(espLabels) do cleanupESP(p) end
+            _espLabelsRef=nil; _espBoxesRef=nil
+        else
+            syncESPRefs()
+            espConn=RS2.RenderStepped:Connect(function()
+                local _,_,myHRP=getParts()
+                for _, p in ipairs(Plrs:GetPlayers()) do
+                    if p~=plr2 then
+                        local char=p.Character
+                        local hrp=char and char:FindFirstChild("HumanoidRootPart")
+                        local hum=char and char:FindFirstChildOfClass("Humanoid")
+                        if char and hrp and hum and hum.Health>0 then
+                            if not espLabels[p] then
+                                local bg=Instance.new("BillboardGui")
+                                bg.Size=UDim2.fromOffset(200,70); bg.AlwaysOnTop=true
+                                bg.StudsOffset=Vector3.new(0,3,0); bg.Parent=gui2
+                                local tl=Instance.new("TextLabel")
+                                tl.Size=UDim2.fromScale(1,1); tl.BackgroundTransparency=1
+                                tl.TextColor3=Color3.new(1,1,1); tl.TextStrokeTransparency=0.5
+                                tl.TextSize=14; tl.Font=Enum.Font.SourceSansBold
+                                tl.TextXAlignment=Enum.TextXAlignment.Center; tl.Parent=bg
+                                espLabels[p]={billboard=bg,label=tl}
+                                syncESPRefs()
+                            end
+                            if not espBoxes[p] then
+                                local box=Instance.new("BoxHandleAdornment")
+                                box.Name="ESPBox"; box.AlwaysOnTop=true; box.ZIndex=1
+                                box.Transparency=0.7; box.Color3=Color3.new(1,1,1); box.Parent=gui2
+                                espBoxes[p]=box
+                                syncESPRefs()
+                            end
+
+                            local glove="?"; local slaps="?"
+                            local ls=p:FindFirstChild("leaderstats")
+                            if ls then
+                                local g=ls:FindFirstChild("Glove"); local s=ls:FindFirstChild("Slaps")
+                                if g then glove=tostring(g.Value) end
+                                if s then slaps=tostring(s.Value) end
+                            end
+
+                            local dist=myHRP and (myHRP.Position-hrp.Position).Magnitude or 0
+                            local lab=espLabels[p]
+                            lab.billboard.Adornee=hrp
+                            lab.label.Text=string.format("名: %s\n%s/%s\n血量: %.0f/%.0f\n距離: %.1f",p.Name,glove,slaps,hum.Health,hum.MaxHealth,dist)
+                            espBoxes[p].Adornee=char; espBoxes[p].Size=char:GetExtentsSize()
+                        else cleanupESP(p); syncESPRefs() end
+                    end
+                end
+                for p in pairs(espLabels) do if not Plrs:FindFirstChild(p.Name) then cleanupESP(p); syncESPRefs() end end
+            end)
+        end
+    end)
+
+    xBtn2.MouseButton1Click:Connect(function()
+        clearAllModes()
+        if espConn then espConn:Disconnect() end
+        for p in pairs(espLabels) do cleanupESP(p) end
+        _espLabelsRef=nil; _espBoxesRef=nil
+        gui2:Destroy()
+    end)
+
+    plr2.CharacterAdded:Connect(function()
+        task.wait(0.5)
+        if lockMode~="none" then setFaceRotation(lockMode,targetPlayer2) end
+    end)
+
+end) end)
