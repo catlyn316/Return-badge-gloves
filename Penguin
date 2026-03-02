@@ -209,6 +209,13 @@ teleportBtn.MouseButton1Click:Connect(function()
     end)
 end)
 
+local directTpFrame, directTpBtn = createRow(page1, "直接傳送到四季", "傳送", 2)
+directTpBtn.MouseButton1Click:Connect(function()
+    pcall(function()
+        TeleportService:Teleport(78804514423551)
+    end)
+end)
+
 -- ========================
 -- 分頁2: 紅企鵝
 -- ========================
