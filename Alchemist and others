@@ -1,4 +1,4 @@
--- 貓玲的鍊金手套腳本 v1.0
+-- 貓玲的鍊金手套腳本 v1.1
 -- 整合：全能控制器 + 鍊金藥水 + 面向/ESP
 
 local CoreGui = game:GetService("CoreGui")
@@ -49,6 +49,9 @@ local fixCamEnabled = false
 local fixCamConn = nil
 local auraEnabled = false
 local auraLastFire = 0
+
+-- 曾出現在 PlagueFolder 的玩家名，永久保留不刪除
+local plagueSeenNames = {}
 
 -- ══════════════════════════════════════════
 -- 工具函式
@@ -291,10 +294,10 @@ local function createScrollingPage(parent)
     padding.PaddingRight=UDim.new(0,4); padding.PaddingTop=UDim.new(0,4); padding.Parent=page
     return page
 end
-local page1=createScrollingPage(contentContainer) -- 基礎/Aura
-local page2=createScrollingPage(contentContainer) -- 視野燈光
-local page3=createScrollingPage(contentContainer) -- 鍊金藥水
-local page4=createScrollingPage(contentContainer) -- 傳送藥水
+local page1=createScrollingPage(contentContainer)
+local page2=createScrollingPage(contentContainer)
+local page3=createScrollingPage(contentContainer)
+local page4=createScrollingPage(contentContainer)
 page1.Visible=true
 
 local function switchTab(n)
@@ -354,19 +357,16 @@ local speedFrame,speedInput,speedButton = createControlRow(page1,"速度:","25",
 local jumpFrame,jumpInput,jumpButton = createControlRow(page1,"跳躍:","75","75",true,2)
 local gravFrame,gravInput,gravButton = createControlRow(page1,"重力:","50","50",true,3)
 
--- 分隔線標題
 local sep1 = Instance.new("TextLabel")
 sep1.Size=UDim2.new(1,0,0,20); sep1.BackgroundColor3=Color3.fromRGB(80,50,140)
 sep1.Text="⚔ Slap Aura"; sep1.TextSize=11; sep1.Font=Enum.Font.GothamBold
 sep1.TextColor3=Color3.fromRGB(255,255,255); sep1.LayoutOrder=4; sep1.Parent=page1
 Instance.new("UICorner",sep1).CornerRadius=UDim.new(0,4)
 
--- Aura 範圍
 local auraRangeFrame=Instance.new("Frame"); auraRangeFrame.Size=UDim2.new(1,0,0,32); auraRangeFrame.BackgroundColor3=Color3.fromRGB(248,249,250); auraRangeFrame.LayoutOrder=5; auraRangeFrame.Parent=page1; Instance.new("UICorner",auraRangeFrame).CornerRadius=UDim.new(0,6)
 local auraRangeLabel=Instance.new("TextLabel"); auraRangeLabel.Text="攻擊範圍:"; auraRangeLabel.Size=UDim2.new(0,80,1,0); auraRangeLabel.Position=UDim2.new(0,6,0,0); auraRangeLabel.BackgroundTransparency=1; auraRangeLabel.Font=Enum.Font.GothamBold; auraRangeLabel.TextSize=12; auraRangeLabel.TextColor3=Color3.fromRGB(85,85,85); auraRangeLabel.TextXAlignment=Enum.TextXAlignment.Left; auraRangeLabel.Parent=auraRangeFrame
 local auraRangeInput=Instance.new("TextBox"); auraRangeInput.Text="17"; auraRangeInput.PlaceholderText="預設17"; auraRangeInput.Size=UDim2.new(0,60,0,22); auraRangeInput.Position=UDim2.new(0,84,0,5); auraRangeInput.BackgroundColor3=Color3.fromRGB(255,255,255); auraRangeInput.TextColor3=Color3.fromRGB(50,50,50); auraRangeInput.Font=Enum.Font.Gotham; auraRangeInput.TextSize=13; auraRangeInput.BorderSizePixel=1; auraRangeInput.BorderColor3=Color3.fromRGB(221,221,221); auraRangeInput.Parent=auraRangeFrame; Instance.new("UICorner",auraRangeInput).CornerRadius=UDim.new(0,5)
 
--- Aura 開關
 local auraStatusFrame=Instance.new("Frame"); auraStatusFrame.Size=UDim2.new(1,0,0,32); auraStatusFrame.BackgroundColor3=Color3.fromRGB(248,249,250); auraStatusFrame.LayoutOrder=6; auraStatusFrame.Parent=page1; Instance.new("UICorner",auraStatusFrame).CornerRadius=UDim.new(0,6)
 local auraStatusLabel=Instance.new("TextLabel"); auraStatusLabel.Text="Slap Aura:"; auraStatusLabel.Size=UDim2.new(0,80,1,0); auraStatusLabel.Position=UDim2.new(0,6,0,0); auraStatusLabel.BackgroundTransparency=1; auraStatusLabel.Font=Enum.Font.GothamBold; auraStatusLabel.TextSize=12; auraStatusLabel.TextColor3=Color3.fromRGB(85,85,85); auraStatusLabel.TextXAlignment=Enum.TextXAlignment.Left; auraStatusLabel.Parent=auraStatusFrame
 local auraStateText=Instance.new("TextLabel"); auraStateText.Text="關閉"; auraStateText.Size=UDim2.new(0,55,0,22); auraStateText.Position=UDim2.new(0,86,0,5); auraStateText.BackgroundTransparency=1; auraStateText.Font=Enum.Font.Gotham; auraStateText.TextSize=12; auraStateText.TextColor3=Color3.fromRGB(150,150,150); auraStateText.Parent=auraStatusFrame
@@ -430,14 +430,12 @@ createAlchemyRow(page4,"藤蔓",1,{"Wild Vine","Wild Vine","Wild Vine","Jade Sto
 createAlchemyRow(page4,"鎌刀",2,{"Plane Flower","Plane Flower","Hazel Lily"})
 createAlchemyRow(page4,"鎖鏈",3,{"Red Crystal","Blue Crystal","Elder Wood","Elder Wood","Elder Wood"})
 
--- 特殊區標題
 local sepSpecial = Instance.new("TextLabel")
 sepSpecial.Size=UDim2.new(1,0,0,20); sepSpecial.BackgroundColor3=Color3.fromRGB(140,80,20)
 sepSpecial.Text="✨ 特殊區"; sepSpecial.TextSize=11; sepSpecial.Font=Enum.Font.GothamBold
 sepSpecial.TextColor3=Color3.fromRGB(255,255,255); sepSpecial.LayoutOrder=4; sepSpecial.Parent=page4
 Instance.new("UICorner",sepSpecial).CornerRadius=UDim.new(0,4)
 
--- 所有藥水定義（鍊金常用16個 + 傳送3個）
 local allPotionsList = {
     {"Dark Root","Dark Root","Dark Root"},
     {"Plane Flower","Plane Flower"},
@@ -460,7 +458,6 @@ local allPotionsList = {
     {"Red Crystal","Blue Crystal","Elder Wood","Elder Wood","Elder Wood"},
 }
 
--- 水手套按鈕
 local waterGloveFrame=Instance.new("Frame"); waterGloveFrame.Size=UDim2.new(1,0,0,32); waterGloveFrame.BackgroundColor3=Color3.fromRGB(248,249,250); waterGloveFrame.LayoutOrder=5; waterGloveFrame.Parent=page4; Instance.new("UICorner",waterGloveFrame).CornerRadius=UDim.new(0,6)
 local waterGloveLabel=Instance.new("TextLabel"); waterGloveLabel.Text="💧 水手套:"; waterGloveLabel.Size=UDim2.new(0,100,1,0); waterGloveLabel.Position=UDim2.new(0,6,0,0); waterGloveLabel.BackgroundTransparency=1; waterGloveLabel.Font=Enum.Font.GothamBold; waterGloveLabel.TextSize=12; waterGloveLabel.TextColor3=Color3.fromRGB(85,85,85); waterGloveLabel.TextXAlignment=Enum.TextXAlignment.Left; waterGloveLabel.Parent=waterGloveFrame
 local waterGloveCountBox=Instance.new("TextBox"); waterGloveCountBox.Size=UDim2.new(0,40,0,22); waterGloveCountBox.Position=UDim2.new(0,104,0,5); waterGloveCountBox.Text="1"; waterGloveCountBox.BackgroundColor3=Color3.fromRGB(255,255,255); waterGloveCountBox.TextColor3=Color3.fromRGB(50,50,50); waterGloveCountBox.Font=Enum.Font.Gotham; waterGloveCountBox.TextSize=13; waterGloveCountBox.ClearTextOnFocus=false; waterGloveCountBox.BorderSizePixel=1; waterGloveCountBox.BorderColor3=Color3.fromRGB(221,221,221); waterGloveCountBox.Parent=waterGloveFrame; Instance.new("UICorner",waterGloveCountBox).CornerRadius=UDim.new(0,5)
@@ -468,13 +465,10 @@ local waterGloveBtn=Instance.new("TextButton"); waterGloveBtn.Size=UDim2.new(0,5
 waterGloveBtn.MouseButton1Click:Connect(function()
     local count=tonumber(waterGloveCountBox.Text) or 1
     for i=1,count do
-        for _, ingredients in ipairs(allPotionsList) do
-            G.potion(ingredients)
-        end
+        for _, ingredients in ipairs(allPotionsList) do G.potion(ingredients) end
     end
 end)
 
--- 麵粉按鈕
 local flourFrame=Instance.new("Frame"); flourFrame.Size=UDim2.new(1,0,0,32); flourFrame.BackgroundColor3=Color3.fromRGB(248,249,250); flourFrame.LayoutOrder=6; flourFrame.Parent=page4; Instance.new("UICorner",flourFrame).CornerRadius=UDim.new(0,6)
 local flourLabel=Instance.new("TextLabel"); flourLabel.Text="🌾 麵粉:"; flourLabel.Size=UDim2.new(0,100,1,0); flourLabel.Position=UDim2.new(0,6,0,0); flourLabel.BackgroundTransparency=1; flourLabel.Font=Enum.Font.GothamBold; flourLabel.TextSize=12; flourLabel.TextColor3=Color3.fromRGB(85,85,85); flourLabel.TextXAlignment=Enum.TextXAlignment.Left; flourLabel.Parent=flourFrame
 local flourCountBox=Instance.new("TextBox"); flourCountBox.Size=UDim2.new(0,40,0,22); flourCountBox.Position=UDim2.new(0,104,0,5); flourCountBox.Text="1"; flourCountBox.BackgroundColor3=Color3.fromRGB(255,255,255); flourCountBox.TextColor3=Color3.fromRGB(50,50,50); flourCountBox.Font=Enum.Font.Gotham; flourCountBox.TextSize=13; flourCountBox.ClearTextOnFocus=false; flourCountBox.BorderSizePixel=1; flourCountBox.BorderColor3=Color3.fromRGB(221,221,221); flourCountBox.Parent=flourFrame; Instance.new("UICorner",flourCountBox).CornerRadius=UDim.new(0,5)
@@ -482,9 +476,7 @@ local flourBtn=Instance.new("TextButton"); flourBtn.Size=UDim2.new(0,50,0,22); f
 flourBtn.MouseButton1Click:Connect(function()
     local count=tonumber(flourCountBox.Text) or 1
     local AlchemistEvent=game:GetService("ReplicatedStorage"):WaitForChild("AlchemistEvent")
-    for i=1,count do
-        AlchemistEvent:FireServer("AddItem","Cake Mix")
-    end
+    for i=1,count do AlchemistEvent:FireServer("AddItem","Cake Mix") end
 end)
 
 -- ══════════════════════════════════════════
@@ -506,25 +498,20 @@ local function updateStatus()
     end
 end
 
--- 速度
 speedButton.MouseButton1Click:Connect(function()
     toggles.speed=not toggles.speed
     if toggles.speed then if not hasOriginalValues then getOriginalValues() end; values.speed=tonumber(speedInput.Text) or 25; applySpeed()
     else applySpeed() end
-    toggleUIState(speedButton,speedFrame,speedInput,toggles.speed)
-    updateStatus()
+    toggleUIState(speedButton,speedFrame,speedInput,toggles.speed); updateStatus()
 end)
 
--- 跳躍
 jumpButton.MouseButton1Click:Connect(function()
     toggles.jump=not toggles.jump
     if toggles.jump then if not hasOriginalValues then getOriginalValues() end; values.jump=tonumber(jumpInput.Text) or 75; applyJump()
     else applyJump() end
-    toggleUIState(jumpButton,jumpFrame,jumpInput,toggles.jump)
-    updateStatus()
+    toggleUIState(jumpButton,jumpFrame,jumpInput,toggles.jump); updateStatus()
 end)
 
--- 重力
 gravButton.MouseButton1Click:Connect(function()
     toggles.gravity=not toggles.gravity
     if toggles.gravity then
@@ -536,27 +523,21 @@ gravButton.MouseButton1Click:Connect(function()
         Workspace.Gravity=originalGravity
         if connections.gravity then connections.gravity:Disconnect() end
     end
-    toggleUIState(gravButton,gravFrame,gravInput,toggles.gravity)
-    updateStatus()
+    toggleUIState(gravButton,gravFrame,gravInput,toggles.gravity); updateStatus()
 end)
 
--- 全亮
 fullbrightButton.MouseButton1Click:Connect(function()
     toggles.fullbright=not toggles.fullbright
     if toggles.fullbright then local v=tonumber(fullbrightInput.Text) or 0.8; values.fullbright=math.clamp(v,0,99); if v~=values.fullbright then fullbrightInput.Text=tostring(values.fullbright) end end
-    updateLighting(); toggleUIState(fullbrightButton,fullbrightFrame,fullbrightInput,toggles.fullbright)
-    updateStatus()
+    updateLighting(); toggleUIState(fullbrightButton,fullbrightFrame,fullbrightInput,toggles.fullbright); updateStatus()
 end)
 
--- 燈光
 brightnessButton.MouseButton1Click:Connect(function()
     toggles.brightness=not toggles.brightness
     if toggles.brightness then values.brightness=tonumber(brightnessInput.Text) or 2 end
-    updateLighting(); toggleUIState(brightnessButton,brightnessFrame,brightnessInput,toggles.brightness)
-    updateStatus()
+    updateLighting(); toggleUIState(brightnessButton,brightnessFrame,brightnessInput,toggles.brightness); updateStatus()
 end)
 
--- 修復鏡頭
 fixCamButton.MouseButton1Click:Connect(function()
     fixCamEnabled = true; applyFixCamera()
     if not fixCamConn then startFixCamGuard() end
@@ -572,7 +553,6 @@ fixCamButton.MouseButton1Click:Connect(function()
     updateStatus()
 end)
 
--- 無濾鏡
 noFilterButton.MouseButton1Click:Connect(function()
     toggles.noFilter=not toggles.noFilter
     if toggles.noFilter then
@@ -603,11 +583,9 @@ noFilterButton.MouseButton1Click:Connect(function()
         for effect,backup in pairs(postEffectBackups) do if effect and effect.Parent then for prop,value in pairs(backup) do pcall(function() effect[prop]=value end) end end end
         postEffectBackups={}
     end
-    toggleUIState(noFilterButton,noFilterFrame,noFilterStatus,toggles.noFilter)
-    updateStatus()
+    toggleUIState(noFilterButton,noFilterFrame,noFilterStatus,toggles.noFilter); updateStatus()
 end)
 
--- 除霧
 nofogButton.MouseButton1Click:Connect(function()
     toggles.nofog=not toggles.nofog
     if toggles.nofog then
@@ -625,11 +603,9 @@ nofogButton.MouseButton1Click:Connect(function()
         for atm,backup in pairs(atmosphereBackups) do if atm and atm.Parent then for prop,value in pairs(backup) do pcall(function() atm[prop]=value end) end end end
         atmosphereBackups={}
     end
-    toggleUIState(nofogButton,nofogFrame,nofogStatus,toggles.nofog)
-    updateStatus()
+    toggleUIState(nofogButton,nofogFrame,nofogStatus,toggles.nofog); updateStatus()
 end)
 
--- 鏡頭距離
 cameraDistButton.MouseButton1Click:Connect(function()
     toggles.cameraDist=not toggles.cameraDist
     if toggles.cameraDist then
@@ -640,8 +616,7 @@ cameraDistButton.MouseButton1Click:Connect(function()
         if connections.camDistGuard then connections.camDistGuard:Disconnect() end
         connections.camDistGuard = RunService.Heartbeat:Connect(function()
             if not toggles.cameraDist then
-                if connections.camDistGuard then connections.camDistGuard:Disconnect(); connections.camDistGuard=nil end
-                return
+                if connections.camDistGuard then connections.camDistGuard:Disconnect(); connections.camDistGuard=nil end; return
             end
             if player.CameraMode == Enum.CameraMode.LockFirstPerson then
                 player.CameraMode = Enum.CameraMode.Classic
@@ -652,33 +627,30 @@ cameraDistButton.MouseButton1Click:Connect(function()
         player.CameraMaxZoomDistance=128; player.CameraMinZoomDistance=0.5
         if connections.camDistGuard then connections.camDistGuard:Disconnect(); connections.camDistGuard=nil end
     end
-    toggleUIState(cameraDistButton,cameraDistFrame,cameraDistInput,toggles.cameraDist)
-    updateStatus()
+    toggleUIState(cameraDistButton,cameraDistFrame,cameraDistInput,toggles.cameraDist); updateStatus()
 end)
 
 -- ══════════════════════════════════════════
 -- Slap Aura 邏輯（PlagueHit）
 -- ══════════════════════════════════════════
-
--- 儲存 ESP 相關的參照（供後面 ESP 模組更新顏色）
-local _espLabelsRef = nil  -- 由 ESP 模組設定
+local _espLabelsRef = nil
 local _espBoxesRef  = nil
 
+-- PlagueFolder 讀取：進去過的名字永久保留，不管玩家是否還在線
 local function getPlayersInPlagueFolder()
-    local count = 0
-    local names = {}
     local myChar = player.Character
     if not myChar then return 0, {} end
     local plagueFolder = myChar:FindFirstChild("PlagueFolder")
-    if not plagueFolder then return 0, {} end
-    for _, child in pairs(plagueFolder:GetChildren()) do
-        -- 子物件名稱為玩家名
-        if Players:FindFirstChild(child.Name) then
-            count = count + 1
-            table.insert(names, child.Name)
+    if plagueFolder then
+        for _, child in pairs(plagueFolder:GetChildren()) do
+            plagueSeenNames[child.Name] = true  -- 加入即永久記錄
         end
     end
-    return count, names
+    local names = {}
+    for name, _ in pairs(plagueSeenNames) do
+        table.insert(names, name)
+    end
+    return #names, names
 end
 
 local function getNearestPlayerInRange(range)
@@ -700,9 +672,7 @@ local function fireAuraOnTarget(targetPlayer)
     local leftArm = targetPlayer.Character:FindFirstChild("Left Arm")
     if not leftArm then leftArm = targetPlayer.Character:FindFirstChild("LeftHand") end
     if leftArm then
-        pcall(function()
-            ReplicatedStorage.PlagueHit:FireServer(leftArm)
-        end)
+        pcall(function() ReplicatedStorage.PlagueHit:FireServer(leftArm) end)
     end
 end
 
@@ -714,15 +684,12 @@ local function fireAuraNearestInRange()
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
             local dist = (p.Character.HumanoidRootPart.Position - myPos).Magnitude
-            if dist <= values.auraRange and dist < nearestDist then
-                nearest = p; nearestDist = dist
-            end
+            if dist <= values.auraRange and dist < nearestDist then nearest = p; nearestDist = dist end
         end
     end
     if nearest then fireAuraOnTarget(nearest) end
 end
 
--- Aura 點擊觸發（Mouse.Button1Down 每次點擊觸發，1秒冷卻）
 local auraMouseConn = nil
 
 local function startAuraClickListener()
@@ -731,7 +698,7 @@ local function startAuraClickListener()
     auraMouseConn = mouse.Button1Down:Connect(function()
         if not auraEnabled then return end
         local now = tick()
-        if now - auraLastFire < 1 then return end  -- 1秒冷卻
+        if now - auraLastFire < 1 then return end
         auraLastFire = now
         fireAuraNearestInRange()
     end)
@@ -750,11 +717,11 @@ RunService.Heartbeat:Connect(function()
     end
     local count, names = getPlayersInPlagueFolder()
     if count > 0 then
-        plagueCountLabel.Text = "☣ 感染中："..count.."人 ("..table.concat(names,", ")..")"
+        plagueCountLabel.Text = "☣ 感染過："..count.."人 ("..table.concat(names,", ")..")"
         plagueCountLabel.TextColor3 = Color3.fromRGB(100,255,100)
         plagueCountFrame.BackgroundColor3 = Color3.fromRGB(20,50,20)
     else
-        plagueCountLabel.Text = "☣ PlagueFolder：0人感染"
+        plagueCountLabel.Text = "☣ PlagueFolder：0人"
         plagueCountLabel.TextColor3 = Color3.fromRGB(200,200,200)
         plagueCountFrame.BackgroundColor3 = Color3.fromRGB(30,30,30)
     end
@@ -763,10 +730,7 @@ RunService.Heartbeat:Connect(function()
     if _espLabelsRef and _espBoxesRef then
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= player then
-                local inPlague = false
-                for _, n in ipairs(names) do
-                    if n == p.Name then inPlague=true; break end
-                end
+                local inPlague = plagueSeenNames[p.Name] == true
                 local col = inPlague and Color3.fromRGB(0,255,80) or Color3.fromRGB(255,255,255)
                 if _espLabelsRef[p] and _espLabelsRef[p].label then
                     _espLabelsRef[p].label.TextColor3 = col
@@ -779,7 +743,6 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- Aura 開關按鈕
 auraToggleBtn.MouseButton1Click:Connect(function()
     auraEnabled = not auraEnabled
     if auraEnabled then
@@ -820,7 +783,6 @@ local function enableDrag(frame, dragHandle)
 end
 enableDrag(mainFrame, titleBar)
 
--- 縮小/展開
 local miniFrame=Instance.new("Frame"); miniFrame.Size=UDim2.new(0,160,0,32); miniFrame.Position=UDim2.new(0.5,-80,0,30); miniFrame.BackgroundColor3=Color3.fromRGB(80,50,140); miniFrame.Visible=false; miniFrame.Parent=screenGui; Instance.new("UICorner",miniFrame).CornerRadius=UDim.new(0,6)
 local miniTitle=Instance.new("TextLabel"); miniTitle.Text="🧪 鍊金手套"; miniTitle.Size=UDim2.new(1,-36,1,0); miniTitle.BackgroundTransparency=1; miniTitle.Font=Enum.Font.GothamBold; miniTitle.TextSize=14; miniTitle.TextColor3=Color3.fromRGB(255,255,255); miniTitle.Parent=miniFrame
 local expandButton=Instance.new("TextButton"); expandButton.Text="+"; expandButton.Size=UDim2.new(0,24,0,24); expandButton.Position=UDim2.new(1,-28,0,4); expandButton.BackgroundColor3=Color3.fromRGB(76,175,80); expandButton.TextColor3=Color3.fromRGB(255,255,255); expandButton.Parent=miniFrame; Instance.new("UICorner",expandButton).CornerRadius=UDim.new(0,5)
@@ -1056,7 +1018,6 @@ task.spawn(function() pcall(function()
         if lockMode=="center" then clearAllModes() else clearAllModes(); lockMode="center"; updateButtonState(centerBtn,true); setFaceRotation("center") end
     end)
 
-    -- ESP
     local espEnabled=false
     local espLabels={}
     local espBoxes={}
@@ -1067,7 +1028,6 @@ task.spawn(function() pcall(function()
         if espBoxes[p] then espBoxes[p]:Destroy(); espBoxes[p]=nil end
     end
 
-    -- 把 ESP 參照傳給主模組（供 Plague 顏色更新使用）
     local function syncESPRefs()
         _espLabelsRef = espLabels
         _espBoxesRef  = espBoxes
@@ -1109,7 +1069,6 @@ task.spawn(function() pcall(function()
                                 espBoxes[p]=box
                                 syncESPRefs()
                             end
-
                             local glove="?"; local slaps="?"
                             local ls=p:FindFirstChild("leaderstats")
                             if ls then
@@ -1117,7 +1076,6 @@ task.spawn(function() pcall(function()
                                 if g then glove=tostring(g.Value) end
                                 if s then slaps=tostring(s.Value) end
                             end
-
                             local dist=myHRP and (myHRP.Position-hrp.Position).Magnitude or 0
                             local lab=espLabels[p]
                             lab.billboard.Adornee=hrp
