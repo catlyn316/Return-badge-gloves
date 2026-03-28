@@ -648,8 +648,103 @@ swingPosBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ── 3-2 發動組合能力 ─────────────────────────────────────────
-local r31 = makeRow(p3, 2, 68)
+-- ── 3-2 設定當前位置（與攻擊流程無關，純傳送用）────────────────
+local r32 = makeRow(p3, 2, 34)
+makeLabel(r32, "當前位置:", 6, 0, 80, 34)
+local savedPosInfo = Instance.new("TextLabel")
+savedPosInfo.Size = UDim2.new(0, 96, 0, 22)
+savedPosInfo.Position = UDim2.new(0, 88, 0, 6)
+savedPosInfo.BackgroundTransparency = 1
+savedPosInfo.Text = "未設定"
+savedPosInfo.TextSize = 11; savedPosInfo.Font = Enum.Font.Gotham
+savedPosInfo.TextColor3 = THEME.textMuted
+savedPosInfo.TextXAlignment = Enum.TextXAlignment.Left
+savedPosInfo.Parent = r32
+
+-- 左按鈕：設定 / 清除
+local savedPosSetBtn = makeButton(r32, "設定位置", 190, 5, 74, 24, Color3.fromRGB(80, 80, 80))
+
+-- 右按鈕：傳送（平時灰暗，有設定後才亮起）
+-- 放在列外另起一列，行高 34
+local r32b = makeRow(p3, 3, 34)
+local savedPosTpBtn  = makeButton(r32b, "傳送到此", 6,  5, 74, 24, Color3.fromRGB(50, 50, 50))
+local savedPosClear2 = makeButton(r32b, "清除",    84,  5, 46, 24, Color3.fromRGB(50, 50, 50))
+-- 說明標籤
+local savedPosTpInfo = Instance.new("TextLabel")
+savedPosTpInfo.Size = UDim2.new(0, 120, 0, 22)
+savedPosTpInfo.Position = UDim2.new(0, 134, 0, 6)
+savedPosTpInfo.BackgroundTransparency = 1
+savedPosTpInfo.Text = ""
+savedPosTpInfo.TextSize = 10; savedPosTpInfo.Font = Enum.Font.Gotham
+savedPosTpInfo.TextColor3 = THEME.textMuted
+savedPosTpInfo.TextXAlignment = Enum.TextXAlignment.Left
+savedPosTpInfo.Parent = r32b
+
+local quakeSavedCF = nil  -- 儲存的傳送位置
+
+local function refreshSavedPosUI()
+    if quakeSavedCF then
+        savedPosSetBtn.BackgroundColor3 = THEME.green
+        savedPosSetBtn.Text = "重新設定"
+        savedPosInfo.Text = string.format("(%.0f, %.0f, %.0f)",
+            quakeSavedCF.X, quakeSavedCF.Y, quakeSavedCF.Z)
+        savedPosInfo.TextColor3 = THEME.green
+        r32.BackgroundColor3 = Color3.fromRGB(8, 28, 12)
+        -- 傳送與清除按鈕亮起
+        savedPosTpBtn.BackgroundColor3  = THEME.primary
+        savedPosClear2.BackgroundColor3 = THEME.red
+        savedPosTpInfo.Text = "已設定，可傳送"
+        savedPosTpInfo.TextColor3 = THEME.accent
+    else
+        savedPosSetBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+        savedPosSetBtn.Text = "設定位置"
+        savedPosInfo.Text = "未設定"
+        savedPosInfo.TextColor3 = THEME.textMuted
+        r32.BackgroundColor3 = THEME.bgRow
+        savedPosTpBtn.BackgroundColor3  = Color3.fromRGB(50, 50, 50)
+        savedPosClear2.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        savedPosTpInfo.Text = ""
+        r32b.BackgroundColor3 = THEME.bgRow
+    end
+end
+refreshSavedPosUI()
+
+savedPosSetBtn.MouseButton1Click:Connect(function()
+    local char = player.Character
+    local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then
+        savedPosInfo.Text = "角色不存在"
+        savedPosInfo.TextColor3 = THEME.red
+        return
+    end
+    quakeSavedCF = hrp.CFrame
+    refreshSavedPosUI()
+end)
+
+savedPosClear2.MouseButton1Click:Connect(function()
+    if not quakeSavedCF then return end
+    quakeSavedCF = nil
+    refreshSavedPosUI()
+end)
+
+savedPosTpBtn.MouseButton1Click:Connect(function()
+    if not quakeSavedCF then return end
+    local char = player.Character
+    local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    pcall(function() hrp.CFrame = quakeSavedCF end)
+    savedPosTpInfo.Text = "✅ 傳送完成"
+    savedPosTpInfo.TextColor3 = THEME.green
+    task.delay(1.5, function()
+        if quakeSavedCF then
+            savedPosTpInfo.Text = "已設定，可傳送"
+            savedPosTpInfo.TextColor3 = THEME.accent
+        end
+    end)
+end)
+
+-- ── 3-3 發動組合能力 ─────────────────────────────────────────
+local r31 = makeRow(p3, 4, 68)
 makeLabel(r31, "發動組合能力:", 6, 0, 92, 34)
 local quakeTargetInput = makeInput(r31, "狂暴玩家名", 100, 6, 82)
 local quakeStatusLabel = Instance.new("TextLabel")
@@ -709,16 +804,27 @@ quakeBtn.MouseButton1Click:Connect(function()
             task.wait(4.2)
             if not quakeRunning then resetQuakeUI() return end
 
-            -- 步驟2：瞬移 + VineThud
+            -- 步驟2：瞬移到目標位置，面向揮棒設定位置（若有設定）後發動 VineThud
             quakeStatusLabel.Text = "瞬移 + VineThud…"
             tgtRoot = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-            pcall(function() if tgtRoot then hrp.CFrame = tgtRoot.CFrame end end)
+            pcall(function()
+                if not tgtRoot then return end
+                if quakeSwingCF then
+                    -- 移到目標位置，但朝向揮棒設定點
+                    local standPos  = tgtRoot.Position
+                    local swingPos  = quakeSwingCF.Position
+                    local lookAt    = CFrame.new(standPos, Vector3.new(swingPos.X, standPos.Y, swingPos.Z))
+                    hrp.CFrame = lookAt
+                else
+                    hrp.CFrame = tgtRoot.CFrame
+                end
+            end)
             task.wait(0.2)
             pcall(function() ReplicatedStorage.VineThud:FireServer() end)
             task.wait(1)
             if not quakeRunning then resetQuakeUI() return end
 
-            -- 步驟3：點終點 + 放大目標 + 移動到揮棒位置（或目標位置）+ finished
+            -- 步驟3：點終點 + 放大目標 + 移動到揮棒位置（或目標位置）並面向目標 + finished
             quakeStatusLabel.Text = "觸發 HomeRun 終點…"
             pcall(function()
                 local lobby = Workspace:FindFirstChild("Lobby")
@@ -736,7 +842,6 @@ quakeBtn.MouseButton1Click:Connect(function()
             pcall(function()
                 tgtRoot = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
                 if quakeSwingCF and tgtRoot then
-                    -- 面向目標：保持設定位置的 XZ，Y 不變，朝向目標 HRP
                     local swingPos  = quakeSwingCF.Position
                     local targetPos = tgtRoot.Position
                     local lookAt    = CFrame.new(swingPos, Vector3.new(targetPos.X, swingPos.Y, targetPos.Z))
@@ -953,7 +1058,10 @@ local EXPLAIN_TEXT =
     "要幫的用自動充能就行。\n\n" ..
     "【地震解法】\n" ..
     "讓蓄力10次後的狂暴被Woah能力擊退後，又被最大蓄力的全壘打(Home Run)打飛，" ..
-    "即可讓用狂暴的玩家獲得地震。"
+    "即可讓用狂暴的玩家獲得地震。\n" ..
+    "可先讓目標設定當前位置後，再試用組合能力確定目標被Woah擊飛的軌跡，" ..
+    "在落地點設定揮棒位置，再讓目標傳送回原本位置，" ..
+    "讓目標面向揮棒的位置後再用組合能力，這樣應該就能得到地震手套了。"
 
 -- ── 修復說明文字消失問題 ─────────────────────────────────────
 -- 原因：Frame 設了 AutomaticSize=Y，但 TextLabel 也設了 AutomaticSize=Y，
