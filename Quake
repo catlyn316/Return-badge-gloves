@@ -1,4 +1,4 @@
--- 貓玲的 slap battle 腳本區 v1.2
+-- 貓玲的地震區手套腳本 v1.3 (internal)
 -- 分區：動能 / 狂暴 / 地震 / 其他 / 說明
 
 local CoreGui           = game:GetService("CoreGui")
@@ -121,7 +121,7 @@ Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 10)
 local titleLabel = Instance.new("TextLabel")
 titleLabel.Size = UDim2.new(1, -60, 1, 0)
 titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "貓玲的 SB 腳本區"
+titleLabel.Text = "貓玲的地震區手套"
 titleLabel.TextSize = 14; titleLabel.Font = Enum.Font.GothamBold
 titleLabel.TextColor3 = THEME.accent
 titleLabel.TextXAlignment = Enum.TextXAlignment.Center
@@ -601,9 +601,57 @@ end)
 -- ============================================================
 local p3 = pages[3]
 
-local r31 = makeRow(p3, 1, 68)
+-- ── 3-1 設定揮棒位置 ──────────────────────────────────────────
+-- 按一次：記錄當前位置，按鈕變綠顯示「已設定」
+-- 再按一次：清除設定，按鈕回灰
+local r30 = makeRow(p3, 1, 34)
+makeLabel(r30, "揮棒位置:", 6, 0, 80, 34)
+local swingPosInfo = Instance.new("TextLabel")
+swingPosInfo.Size = UDim2.new(0, 96, 0, 22)
+swingPosInfo.Position = UDim2.new(0, 88, 0, 6)
+swingPosInfo.BackgroundTransparency = 1
+swingPosInfo.Text = "未設定"
+swingPosInfo.TextSize = 11; swingPosInfo.Font = Enum.Font.Gotham
+swingPosInfo.TextColor3 = THEME.textMuted
+swingPosInfo.TextXAlignment = Enum.TextXAlignment.Left
+swingPosInfo.Parent = r30
+local swingPosBtn = makeButton(r30, "設定位置", 190, 5, 74, 24, Color3.fromRGB(80, 80, 80))
+
+-- 儲存揮棒位置（CFrame），nil 表示未設定
+local quakeSwingCF = nil
+
+swingPosBtn.MouseButton1Click:Connect(function()
+    if quakeSwingCF then
+        -- 已設定 → 清除
+        quakeSwingCF = nil
+        swingPosBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+        swingPosBtn.Text = "設定位置"
+        swingPosInfo.Text = "未設定"
+        swingPosInfo.TextColor3 = THEME.textMuted
+        r30.BackgroundColor3 = THEME.bgRow
+    else
+        -- 未設定 → 記錄目前位置
+        local char = player.Character
+        local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then
+            swingPosInfo.Text = "角色不存在"
+            swingPosInfo.TextColor3 = THEME.red
+            return
+        end
+        quakeSwingCF = hrp.CFrame
+        swingPosBtn.BackgroundColor3 = THEME.green
+        swingPosBtn.Text = "清除設定"
+        swingPosInfo.Text = string.format("(%.0f, %.0f, %.0f)",
+            quakeSwingCF.X, quakeSwingCF.Y, quakeSwingCF.Z)
+        swingPosInfo.TextColor3 = THEME.green
+        r30.BackgroundColor3 = Color3.fromRGB(8, 28, 12)
+    end
+end)
+
+-- ── 3-2 發動組合能力 ─────────────────────────────────────────
+local r31 = makeRow(p3, 2, 68)
 makeLabel(r31, "發動組合能力:", 6, 0, 92, 34)
-local quakeTargetInput = makeInput(r31, "狂暴玩家名", 100, 6, 86)
+local quakeTargetInput = makeInput(r31, "狂暴玩家名", 100, 6, 82)
 local quakeStatusLabel = Instance.new("TextLabel")
 quakeStatusLabel.Size = UDim2.new(1, -12, 0, 20)
 quakeStatusLabel.Position = UDim2.new(0, 6, 0, 40)
@@ -649,6 +697,7 @@ quakeBtn.MouseButton1Click:Connect(function()
             local tgtRoot = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
             local OGLSize = tgtRoot and tgtRoot.Size
 
+            -- 步驟1：啟動 HomeRun + Woah
             quakeStatusLabel.Text = "啟動 HomeRun…"; quakeStatusLabel.TextColor3 = THEME.accent
             pcall(function() ReplicatedStorage.HomeRun:FireServer({["start"] = true}) end)
             pcall(function()
@@ -660,6 +709,7 @@ quakeBtn.MouseButton1Click:Connect(function()
             task.wait(4.2)
             if not quakeRunning then resetQuakeUI() return end
 
+            -- 步驟2：瞬移 + VineThud
             quakeStatusLabel.Text = "瞬移 + VineThud…"
             tgtRoot = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
             pcall(function() if tgtRoot then hrp.CFrame = tgtRoot.CFrame end end)
@@ -668,6 +718,7 @@ quakeBtn.MouseButton1Click:Connect(function()
             task.wait(1)
             if not quakeRunning then resetQuakeUI() return end
 
+            -- 步驟3：點終點 + 放大目標 + 移動到揮棒位置（或目標位置）+ finished
             quakeStatusLabel.Text = "觸發 HomeRun 終點…"
             pcall(function()
                 local lobby = Workspace:FindFirstChild("Lobby")
@@ -680,13 +731,24 @@ quakeBtn.MouseButton1Click:Connect(function()
                 if tgtRoot then tgtRoot.Size = Vector3.new(50, 50, 50) end
             end)
             task.wait(0.2)
+
+            -- 揮棒位置：有設定 → 移到設定位置並面向目標；沒設定 → 移到目標位置
             pcall(function()
                 tgtRoot = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-                if tgtRoot then hrp.CFrame = tgtRoot.CFrame end
+                if quakeSwingCF and tgtRoot then
+                    -- 面向目標：保持設定位置的 XZ，Y 不變，朝向目標 HRP
+                    local swingPos  = quakeSwingCF.Position
+                    local targetPos = tgtRoot.Position
+                    local lookAt    = CFrame.new(swingPos, Vector3.new(targetPos.X, swingPos.Y, targetPos.Z))
+                    hrp.CFrame = lookAt
+                elseif tgtRoot then
+                    hrp.CFrame = tgtRoot.CFrame
+                end
             end)
             task.wait(0.1)
             pcall(function() ReplicatedStorage.HomeRun:FireServer({["finished"] = true}) end)
 
+            -- 步驟4：還原大小
             quakeStatusLabel.Text = "還原大小中…"
             task.wait(3)
             pcall(function()
@@ -983,7 +1045,7 @@ Instance.new("UICorner", miniFrame).CornerRadius = UDim.new(0, 6)
 local stroke2 = Instance.new("UIStroke")
 stroke2.Color = THEME.primaryDark; stroke2.Thickness = 1.5; stroke2.Parent = miniFrame
 local miniTitle = Instance.new("TextLabel")
-miniTitle.Text = "貓玲SB腳本"; miniTitle.Size = UDim2.new(1, -36, 1, 0)
+miniTitle.Text = "地震區手套"; miniTitle.Size = UDim2.new(1, -36, 1, 0)
 miniTitle.BackgroundTransparency = 1; miniTitle.Font = Enum.Font.GothamBold
 miniTitle.TextSize = 13; miniTitle.TextColor3 = THEME.accent; miniTitle.Parent = miniFrame
 local expandBtn = Instance.new("TextButton")
@@ -1010,4 +1072,4 @@ closeBtn.MouseButton1Click:Connect(function()
     screenGui:Destroy()
 end)
 
-print("貓玲的 SB 腳本區 v1.2 已載入！")
+print("貓玲的地震區手套腳本已載入！")
