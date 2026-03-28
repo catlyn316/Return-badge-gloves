@@ -1,4 +1,4 @@
--- 貓玲的地震區手套腳本 v1.4 (internal)
+-- 貓玲的地震區手套腳本 v1.5 (internal)
 -- 分區：動能 / 狂暴 / 地震 / 其他 / 說明
 
 local CoreGui           = game:GetService("CoreGui")
@@ -99,7 +99,7 @@ end
 parentUI(screenGui)
 
 -- ============================================================
--- 主框架（大小改成 280×310，與幻影精通一致）
+-- 主框架
 -- ============================================================
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(0, 280, 0, 310)
@@ -146,11 +146,10 @@ closeBtn.Parent = titleBar
 Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 5)
 
 -- ============================================================
--- 分頁按鈕列（可橫向滑動，同時顯示約 3.5 個）
+-- 分頁按鈕列
 -- ============================================================
 local tabNames = {"動能","狂暴","地震","破地者","其他","說明"}
 
--- 外層裁切框（寬度固定，超出部分隱藏）
 local tabBar = Instance.new("Frame")
 tabBar.Size = UDim2.new(0.95, 0, 0, 26)
 tabBar.Position = UDim2.new(0.025, 0, 0, 36)
@@ -159,19 +158,18 @@ tabBar.ClipsDescendants = true
 tabBar.Parent = mainFrame
 Instance.new("UICorner", tabBar).CornerRadius = UDim.new(0, 6)
 
--- 內層可滑動的 ScrollingFrame
 local tabScroll = Instance.new("ScrollingFrame")
 tabScroll.Size = UDim2.new(1, 0, 1, 0)
 tabScroll.BackgroundTransparency = 1
 tabScroll.BorderSizePixel = 0
-tabScroll.ScrollBarThickness = 0          -- 隱藏滾動條，靠手指/滑鼠拖動
+tabScroll.ScrollBarThickness = 0
 tabScroll.ScrollingDirection = Enum.ScrollingDirection.X
 tabScroll.AutomaticCanvasSize = Enum.AutomaticSize.X
 tabScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 tabScroll.Parent = tabBar
 
 local tabInner = Instance.new("Frame")
-tabInner.Size = UDim2.new(0, 0, 1, 0)    -- 寬度由 UIListLayout 自動撐開
+tabInner.Size = UDim2.new(0, 0, 1, 0)
 tabInner.AutomaticSize = Enum.AutomaticSize.X
 tabInner.BackgroundTransparency = 1
 tabInner.Parent = tabScroll
@@ -187,8 +185,6 @@ tabPad.PaddingLeft  = UDim.new(0, 3)
 tabPad.PaddingRight = UDim.new(0, 3)
 tabPad.Parent = tabInner
 
--- 每個 tab 寬度設為讓視窗剛好顯示 3.5 個
--- 視窗可視寬 ≈ 266px（280 * 0.95），3.5 個 + 間隔 → 每個約 72px
 local TAB_W = 72
 
 local tabButtons = {}
@@ -205,7 +201,7 @@ for i, name in ipairs(tabNames) do
 end
 
 -- ============================================================
--- 內容容器（高度縮小以配合 310 總高）
+-- 內容容器
 -- ============================================================
 local contentContainer = Instance.new("Frame")
 contentContainer.Size = UDim2.new(0.95, 0, 0, 216)
@@ -337,7 +333,7 @@ local p1 = pages[1]
 -- ── 1-1 刷倒地數 ─────────────────────────────────────────────
 local r11 = makeRow(p1, 1, 34)
 makeLabel(r11, "刷倒地數:", 6, 0, 92, 34)
-local knockBtn = makeButton(r11, "啟動", 222, 5, 42, 24)
+local knockBtn = makeButton(r11, "啟動", 210, 5, 42, 24) -- 修改位置從 222 -> 210
 
 local knockRunning = false
 local knockThread  = nil
@@ -392,7 +388,7 @@ stunCountLabel.TextSize = 11; stunCountLabel.Font = Enum.Font.Gotham
 stunCountLabel.TextColor3 = THEME.textMuted
 stunCountLabel.TextXAlignment = Enum.TextXAlignment.Left
 stunCountLabel.Parent = r12
-local stunBtn = makeButton(r12, "啟動", 222, 5, 42, 24)
+local stunBtn = makeButton(r12, "啟動", 210, 5, 42, 24) -- 修改位置從 222 -> 210
 
 local stunRunning = false
 local stunThread  = nil
@@ -496,10 +492,10 @@ end)
 -- ============================================================
 local p2 = pages[2]
 
--- ── 2-1 自動充能（120次，固定位置，不可中斷）────────────────
+-- ── 2-1 自動充能（120次）────────────────
 local r21 = makeRow(p2, 1, 34)
 makeLabel(r21, "自動充能:", 6, 0, 92, 34)
-local bKnockBtn = makeButton(r21, "啟動", 222, 5, 42, 24)
+local bKnockBtn = makeButton(r21, "啟動", 210, 5, 42, 24) -- 222 -> 210
 
 local bKnockRunning = false
 
@@ -522,7 +518,6 @@ bKnockBtn.MouseButton1Click:Connect(function()
             end
         end)
 
-        -- 改為 120 次
         for i = 1, 120 do
             if not bKnockRunning then break end
             pcall(function()
@@ -540,8 +535,6 @@ bKnockBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ── 2-2 發動能力 ─────────────────────────────────────────────
--- 輸入目標名，開啟後瞬移到目標頭上（+15），
--- KineticExpl 使用自己角色內的 Kinetic 物件
 local r22 = makeRow(p2, 2, 68)
 makeLabel(r22, "發動能力:", 6, 0, 80, 34)
 local berserkTargetInput = makeInput(r22, "目標玩家名", 88, 6, 102)
@@ -553,7 +546,7 @@ berserkCoolLabel.TextSize = 11; berserkCoolLabel.Font = Enum.Font.Gotham
 berserkCoolLabel.TextColor3 = THEME.textMuted
 berserkCoolLabel.TextXAlignment = Enum.TextXAlignment.Left
 berserkCoolLabel.Parent = r22
-local berserkBtn = makeButton(r22, "啟動", 222, 5, 42, 24)
+local berserkBtn = makeButton(r22, "啟動", 210, 5, 42, 24) -- 222 -> 210
 
 local berserkRunning = false
 local berserkThread  = nil
@@ -587,11 +580,9 @@ berserkBtn.MouseButton1Click:Connect(function()
                 local tgtRoot = tgtChar and tgtChar:FindFirstChild("HumanoidRootPart")
                 if not hrp or not tgtRoot then task.wait(0.2) continue end
 
-                -- 瞬移到目標正上方 15 單位
                 pcall(function() hrp.CFrame = tgtRoot.CFrame * CFrame.new(0, 15, 0) end)
                 task.wait(0.1)
 
-                -- KineticExpl：使用「自己」角色內的 Kinetic 物件
                 pcall(function()
                     local myChar   = player.Character
                     local kinetic  = myChar and myChar:FindFirstChild("Kinetic")
@@ -603,7 +594,6 @@ berserkBtn.MouseButton1Click:Connect(function()
                     end
                 end)
 
-                -- 12.5 秒冷卻
                 local endTime = tick() + 12.5
                 while tick() < endTime and berserkRunning do
                     local rem = math.ceil(endTime - tick())
@@ -631,8 +621,6 @@ end)
 local p3 = pages[3]
 
 -- ── 3-1 設定揮棒位置 ──────────────────────────────────────────
--- 按一次：記錄當前位置，按鈕變綠顯示「已設定」
--- 再按一次：清除設定，按鈕回灰
 local r30 = makeRow(p3, 1, 34)
 makeLabel(r30, "揮棒位置:", 6, 0, 80, 34)
 local swingPosInfo = Instance.new("TextLabel")
@@ -644,14 +632,12 @@ swingPosInfo.TextSize = 11; swingPosInfo.Font = Enum.Font.Gotham
 swingPosInfo.TextColor3 = THEME.textMuted
 swingPosInfo.TextXAlignment = Enum.TextXAlignment.Left
 swingPosInfo.Parent = r30
-local swingPosBtn = makeButton(r30, "設定位置", 190, 5, 74, 24, Color3.fromRGB(80, 80, 80))
+local swingPosBtn = makeButton(r30, "設定位置", 178, 5, 74, 24, Color3.fromRGB(80, 80, 80)) -- 190 -> 178
 
--- 儲存揮棒位置（CFrame），nil 表示未設定
 local quakeSwingCF = nil
 
 swingPosBtn.MouseButton1Click:Connect(function()
     if quakeSwingCF then
-        -- 已設定 → 清除
         quakeSwingCF = nil
         swingPosBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
         swingPosBtn.Text = "設定位置"
@@ -659,7 +645,6 @@ swingPosBtn.MouseButton1Click:Connect(function()
         swingPosInfo.TextColor3 = THEME.textMuted
         r30.BackgroundColor3 = THEME.bgRow
     else
-        -- 未設定 → 記錄目前位置
         local char = player.Character
         local hrp  = char and char:FindFirstChild("HumanoidRootPart")
         if not hrp then
@@ -677,7 +662,7 @@ swingPosBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ── 3-2 設定當前位置（與攻擊流程無關，純傳送用）────────────────
+-- ── 3-2 設定當前位置 ────────────────
 local r32 = makeRow(p3, 2, 34)
 makeLabel(r32, "當前位置:", 6, 0, 80, 34)
 local savedPosInfo = Instance.new("TextLabel")
@@ -690,15 +675,11 @@ savedPosInfo.TextColor3 = THEME.textMuted
 savedPosInfo.TextXAlignment = Enum.TextXAlignment.Left
 savedPosInfo.Parent = r32
 
--- 左按鈕：設定 / 清除
-local savedPosSetBtn = makeButton(r32, "設定位置", 190, 5, 74, 24, Color3.fromRGB(80, 80, 80))
+local savedPosSetBtn = makeButton(r32, "設定位置", 178, 5, 74, 24, Color3.fromRGB(80, 80, 80)) -- 190 -> 178
 
--- 右按鈕：傳送（平時灰暗，有設定後才亮起）
--- 放在列外另起一列，行高 34
 local r32b = makeRow(p3, 3, 34)
 local savedPosTpBtn  = makeButton(r32b, "傳送到此", 6,  5, 74, 24, Color3.fromRGB(50, 50, 50))
 local savedPosClear2 = makeButton(r32b, "清除",    84,  5, 46, 24, Color3.fromRGB(50, 50, 50))
--- 說明標籤
 local savedPosTpInfo = Instance.new("TextLabel")
 savedPosTpInfo.Size = UDim2.new(0, 120, 0, 22)
 savedPosTpInfo.Position = UDim2.new(0, 134, 0, 6)
@@ -709,7 +690,7 @@ savedPosTpInfo.TextColor3 = THEME.textMuted
 savedPosTpInfo.TextXAlignment = Enum.TextXAlignment.Left
 savedPosTpInfo.Parent = r32b
 
-local quakeSavedCF = nil  -- 儲存的傳送位置
+local quakeSavedCF = nil  
 
 local function refreshSavedPosUI()
     if quakeSavedCF then
@@ -719,7 +700,6 @@ local function refreshSavedPosUI()
             quakeSavedCF.X, quakeSavedCF.Y, quakeSavedCF.Z)
         savedPosInfo.TextColor3 = THEME.green
         r32.BackgroundColor3 = Color3.fromRGB(8, 28, 12)
-        -- 傳送與清除按鈕亮起
         savedPosTpBtn.BackgroundColor3  = THEME.primary
         savedPosClear2.BackgroundColor3 = THEME.red
         savedPosTpInfo.Text = "已設定，可傳送"
@@ -785,7 +765,7 @@ quakeStatusLabel.TextSize = 11; quakeStatusLabel.Font = Enum.Font.Gotham
 quakeStatusLabel.TextColor3 = THEME.textMuted
 quakeStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
 quakeStatusLabel.Parent = r31
-local quakeBtn = makeButton(r31, "啟動", 222, 5, 42, 24)
+local quakeBtn = makeButton(r31, "啟動", 210, 5, 42, 24) -- 222 -> 210
 
 local quakeRunning = false
 local quakeThread  = nil
@@ -821,7 +801,6 @@ quakeBtn.MouseButton1Click:Connect(function()
             local tgtRoot = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
             local OGLSize = tgtRoot and tgtRoot.Size
 
-            -- 步驟1：啟動 HomeRun + Woah
             quakeStatusLabel.Text = "啟動 HomeRun…"; quakeStatusLabel.TextColor3 = THEME.accent
             pcall(function() ReplicatedStorage.HomeRun:FireServer({["start"] = true}) end)
             pcall(function()
@@ -833,13 +812,11 @@ quakeBtn.MouseButton1Click:Connect(function()
             task.wait(4.2)
             if not quakeRunning then resetQuakeUI() return end
 
-            -- 步驟2：瞬移到目標位置，面向揮棒設定位置（若有設定）後發動 VineThud
             quakeStatusLabel.Text = "瞬移 + VineThud…"
             tgtRoot = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
             pcall(function()
                 if not tgtRoot then return end
                 if quakeSwingCF then
-                    -- 移到目標位置，但朝向揮棒設定點
                     local standPos  = tgtRoot.Position
                     local swingPos  = quakeSwingCF.Position
                     local lookAt    = CFrame.new(standPos, Vector3.new(swingPos.X, standPos.Y, swingPos.Z))
@@ -853,7 +830,6 @@ quakeBtn.MouseButton1Click:Connect(function()
             task.wait(1)
             if not quakeRunning then resetQuakeUI() return end
 
-            -- 步驟3：點終點 + 放大目標 + 移動到揮棒位置（或目標位置）並面向目標 + finished
             quakeStatusLabel.Text = "觸發 HomeRun 終點…"
             pcall(function()
                 local lobby = Workspace:FindFirstChild("Lobby")
@@ -867,7 +843,6 @@ quakeBtn.MouseButton1Click:Connect(function()
             end)
             task.wait(0.2)
 
-            -- 揮棒位置：有設定 → 移到設定位置並面向目標；沒設定 → 移到目標位置
             pcall(function()
                 tgtRoot = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
                 if quakeSwingCF and tgtRoot then
@@ -882,7 +857,6 @@ quakeBtn.MouseButton1Click:Connect(function()
             task.wait(0.1)
             pcall(function() ReplicatedStorage.HomeRun:FireServer({["finished"] = true}) end)
 
-            -- 步驟4：還原大小
             quakeStatusLabel.Text = "還原大小中…"
             task.wait(3)
             pcall(function()
@@ -916,7 +890,7 @@ quakerStatusLabel.TextSize = 11; quakerStatusLabel.Font = Enum.Font.Gotham
 quakerStatusLabel.TextColor3 = THEME.textMuted
 quakerStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
 quakerStatusLabel.Parent = r41q
-local quakerBtn = makeButton(r41q, "啟動", 222, 5, 42, 24)
+local quakerBtn = makeButton(r41q, "啟動", 210, 5, 42, 24) -- 222 -> 210
 
 local quakerRunning = false
 local quakerThread  = nil
@@ -926,7 +900,6 @@ local function resetQuakerUI()
     quakerBtn.Text = "啟動"; quakerBtn.BackgroundColor3 = THEME.primary
     r41q.BackgroundColor3 = THEME.bgRow
     quakerStatusLabel.Text = "待機"; quakerStatusLabel.TextColor3 = THEME.textMuted
-    -- 確保速度恢復（若偵測中途停止）
     pcall(function()
         local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
         if hum then hum.WalkSpeed = 20 end
@@ -942,13 +915,11 @@ quakerBtn.MouseButton1Click:Connect(function()
         activeFeatures["破地者"] = true; updateStatus()
 
         quakerThread = task.spawn(function()
-            -- 蓄力
             quakerStatusLabel.Text = "蓄力中…"; quakerStatusLabel.TextColor3 = THEME.accent
             pcall(function()
                 ReplicatedStorage.QuakeQuake:FireServer({start = true})
             end)
 
-            -- 等待 3 秒蓄力
             local chargeEnd = tick() + 3
             while tick() < chargeEnd and quakerRunning do
                 local rem = math.ceil(chargeEnd - tick())
@@ -957,20 +928,17 @@ quakerBtn.MouseButton1Click:Connect(function()
             end
             if not quakerRunning then resetQuakerUI() return end
 
-            -- 偵測期間固定速度為 25
             pcall(function()
                 local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
                 if hum then hum.WalkSpeed = 25 end
             end)
 
-            -- 等待：除自己外 3 個或以上玩家在任意 30 單位圓內
             quakerStatusLabel.Text = "等待3人聚集…"; quakerStatusLabel.TextColor3 = THEME.textSub
 
             local centerPos = nil
             local targetGroup = {}
 
             while quakerRunning do
-                -- 對所有玩家兩兩檢查，找出涵蓋最多人的圓心
                 local others = {}
                 for _, p in ipairs(Players:GetPlayers()) do
                     if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
@@ -978,7 +946,6 @@ quakerBtn.MouseButton1Click:Connect(function()
                     end
                 end
 
-                -- 以每個玩家位置為候選圓心，統計 30 單位內的人數
                 local bestCenter = nil
                 local bestGroup  = {}
                 for _, anchor in ipairs(others) do
@@ -997,7 +964,6 @@ quakerBtn.MouseButton1Click:Connect(function()
                 end
 
                 if bestCenter then
-                    -- 計算真正的群組幾何中心
                     local sum = Vector3.new(0, 0, 0)
                     for _, p in ipairs(bestGroup) do
                         sum = sum + p.Character.HumanoidRootPart.Position
@@ -1012,7 +978,6 @@ quakerBtn.MouseButton1Click:Connect(function()
             end
             if not quakerRunning then resetQuakerUI() return end
 
-            -- 移動到圓心並釋放
             quakerStatusLabel.Text = "移動+釋放！"; quakerStatusLabel.TextColor3 = Color3.fromRGB(255, 80, 0)
             local char = player.Character
             local hrp  = char and char:FindFirstChild("HumanoidRootPart")
@@ -1024,37 +989,30 @@ quakerBtn.MouseButton1Click:Connect(function()
                 ReplicatedStorage.QuakeQuake:FireServer({finished = true})
             end)
 
-            -- 釋放後速度改回 20
             pcall(function()
                 local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
                 if hum then hum.WalkSpeed = 20 end
             end)
 
-            -- 0.5 秒後，背對 (0,0,0) 傳送到第一個目標並攻擊
             task.wait(0.5)
             if not quakerRunning then resetQuakerUI() return end
 
             quakerStatusLabel.Text = "攻擊中…"; quakerStatusLabel.TextColor3 = THEME.red
 
-            -- 攻擊所有目標（背對世界原點 (0,0,0)）
             for idx, tgt in ipairs(targetGroup) do
                 if not quakerRunning then break end
                 local tgtChar = tgt.Character
                 local tgtRoot = tgtChar and tgtChar:FindFirstChild("HumanoidRootPart")
-                local tgtHead = tgtChar and tgtChar:FindFirstChild("Head")
-                if not tgtRoot or not tgtHead then continue end
+                if not tgtRoot then continue end
 
-                -- 瞬移到目標，背對 (0,0,0)
                 pcall(function()
                     local tgtPos = tgtRoot.Position
-                    -- 背對原點：面向方向是從原點指向目標，背對就是反過來
                     local facingDir = (tgtPos - Vector3.new(0, 0, 0)).Unit
                     local backCF    = CFrame.new(tgtPos, tgtPos + facingDir)
                     hrp.CFrame = backCF
                 end)
                 task.wait(0.05)
 
-                -- GeneralHit
                 pcall(function()
                     local wsChar = Workspace:FindFirstChild(tgt.Name)
                     local wsHead = wsChar and wsChar:FindFirstChild("Head")
@@ -1087,7 +1045,7 @@ local pOther = pages[5]
 -- ── 5-1 固定位置 ─────────────────────────────────────────────
 local r41 = makeRow(pOther, 1, 34)
 makeLabel(r41, "固定位置:", 6, 0, 100, 34)
-local fixPosBtn = makeButton(r41, "啟動", 222, 5, 42, 24)
+local fixPosBtn = makeButton(r41, "啟動", 210, 5, 42, 24) -- 222 -> 210
 
 local fixPosRunning = false
 local fixPosThread  = nil
@@ -1150,12 +1108,11 @@ distLabel.Parent = r42
 local distInput = makeInput(r42, "0", 52, 66, 60)
 distInput.Text = "0"
 
-local lockPosBtn = makeButton(r42, "啟動", 222, 5, 42, 24)
+local lockPosBtn = makeButton(r42, "啟動", 210, 5, 42, 24) -- 222 -> 210
 
 local lockPosRunning = false
 local lockPosThread  = nil
 
--- ── 修復：統一的 UI 重置函式 ──────────────────────────────────
 local function resetFixPosUI()
     fixPosRunning = false
     if fixPosThread then task.cancel(fixPosThread) fixPosThread = nil end
@@ -1177,19 +1134,14 @@ local function resetLockPosUI()
     updateStatus()
 end
 
--- 固定位置按鈕
 fixPosBtn.MouseButton1Click:Connect(function()
     if fixPosRunning then
-        -- 正在運行 → 解除
         resetFixPosUI()
     else
-        -- 未運行 → 啟動（同時停掉鎖定位置）
         resetLockPosUI()
-
         local char = player.Character
         local hrp  = char and char:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
-
         fixPosSaved   = hrp.CFrame
         fixPosRunning = true
         fixPosBtn.Text = "解除"
@@ -1197,7 +1149,6 @@ fixPosBtn.MouseButton1Click:Connect(function()
         r41.BackgroundColor3 = Color3.fromRGB(20, 8, 4)
         activeFeatures["固定位置"] = true
         updateStatus()
-
         fixPosThread = task.spawn(function()
             while fixPosRunning do
                 local c = player.Character
@@ -1209,25 +1160,19 @@ fixPosBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- 目標鎖定位置按鈕
 lockPosBtn.MouseButton1Click:Connect(function()
     if lockPosRunning then
-        -- 正在運行 → 解除
         resetLockPosUI()
     else
-        -- 未運行 → 啟動（同時停掉固定位置）
         resetFixPosUI()
-
         local targetPlayer, _ = findPlayerByPartialName(lockTargetInput.Text)
         if not targetPlayer then return end
-
         lockPosRunning = true
         lockPosBtn.Text = "解除"
         lockPosBtn.BackgroundColor3 = THEME.red
         r42.BackgroundColor3 = Color3.fromRGB(20, 8, 4)
         activeFeatures["目標鎖定位置"] = true
         updateStatus()
-
         lockPosThread = task.spawn(function()
             while lockPosRunning do
                 local char    = player.Character
@@ -1249,47 +1194,30 @@ end)
 -- ============================================================
 local p5 = pages[6]
 
--- 字體大小設定列
 local rFont = makeRow(p5, 1, 34)
 makeLabel(rFont, "字體大小:", 6, 0, 80, 34)
 local fontSizeInput = makeInput(rFont, "12", 88, 6, 60)
 fontSizeInput.Text = "12"
 
 local EXPLAIN_TEXT = 
-    "【以下手套都只能在公服獲得】\n\n" .. -- 在最上方新增此行
+    "【以下手套都只能在公服獲得】\n\n" .. 
     "【動能解法】\n" ..
     "倒地100次且使用過Stun能力50次都有命中別人、期間不死亡即可獲得。\n" ..
-    "可用腳本或石像(Moai)或棍子(Stick)刷完倒地數後，選個人（小號或朋友，" ..
-    "如果都沒有也可以不輸入讓腳本隨機打）開刷能力數，" ..
-    "如果50次都有中那你應該拿到手套了。\n\n" ..
+    "可用腳本或石像(Moai)或棍子(Stick)刷完倒地數後，選個人開刷能力數。\n\n" ..
     "【狂暴解法】\n" ..
-    "被最大充能的動能手套衝擊波命中3~4次期間不死就能獲得。\n" ..
-    "要解的可用固定位置和防虛空（也可用魚手套在被衝出去時跳回場上），" ..
-    "要幫的用自動充能就行。\n\n" ..
+    "被最大充能的動能手套衝擊波命中3~4次期間不死就能獲得。\n\n" ..
     "【地震解法】\n" ..
     "讓蓄力10次後的狂暴被Woah能力擊退後，又被最大蓄力的全壘打(Home Run)打飛，" ..
-    "即可讓用狂暴的玩家獲得地震。\n" ..
-    "可先讓目標設定當前位置後，再試用組合能力確定目標被Woah擊飛的軌跡，" ..
-    "在落地點設定揮棒位置，再讓目標傳送回原本位置，" ..
-    "讓目標面向揮棒的位置後再用組合能力，這樣應該就能得到地震手套了。\n\n" ..
+    "即可讓用狂暴的玩家獲得地震。\n\n" ..
     "【破地者解法】\n" ..
-    "用最大蓄力的地震一次埋了3個人並都打下虛空即可獲得。\n" ..
-    "要用腳本的要先進紅門，腳本開啟後會蓄力3秒，" ..
-    "之後會等除自己外的3個或以上的玩家進入同個30單位內的圓，" ..
-    "然後移動到圓心釋放並背對中心攻擊（可能還是找3個好友幫更好）。"
+    "用最大蓄力的地震一次埋了3個人並都打下虛空即可獲得。"
 
 
--- ── 修復說明文字消失問題 ─────────────────────────────────────
--- 原因：Frame 設了 AutomaticSize=Y，但 TextLabel 也設了 AutomaticSize=Y，
--- 兩者互相依賴會讓 ScrollingFrame 的 CanvasSize 計算出錯導致內容被裁掉。
--- 修復方式：不用 AutomaticSize，改用固定高度容器，
--- TextLabel 寬度自適應但高度由 TextBounds 動態算出後手動套用。
-
-local textRow = makeRow(p5, 2, 10)  -- 初始高度佔位，後面會更新
-textRow.AutomaticSize = Enum.AutomaticSize.None  -- 不要自動
+local textRow = makeRow(p5, 2, 10)  
+textRow.AutomaticSize = Enum.AutomaticSize.None  
 
 local explainLabel = Instance.new("TextLabel")
-explainLabel.Size = UDim2.new(1, -12, 0, 10)  -- 高度先給小值，後面手動更新
+explainLabel.Size = UDim2.new(1, -12, 0, 10)  
 explainLabel.Position = UDim2.new(0, 6, 0, 6)
 explainLabel.BackgroundTransparency = 1
 explainLabel.Text = EXPLAIN_TEXT
@@ -1297,12 +1225,9 @@ explainLabel.TextSize = 12; explainLabel.Font = Enum.Font.Gotham
 explainLabel.TextColor3 = THEME.textMain
 explainLabel.TextXAlignment = Enum.TextXAlignment.Left
 explainLabel.TextWrapped = true
-explainLabel.RichText = false
 explainLabel.Parent = textRow
 
--- 根據目前 TextSize 計算實際高度並更新 row 及 label
 local function refreshExplainHeight()
-    -- TextBounds 需要等下一幀才準確
     task.defer(function()
         local bounds = game:GetService("TextService"):GetTextSize(
             explainLabel.Text,
@@ -1310,13 +1235,12 @@ local function refreshExplainHeight()
             explainLabel.Font,
             Vector2.new(explainLabel.AbsoluteSize.X > 10 and explainLabel.AbsoluteSize.X or 240, math.huge)
         )
-        local newH = bounds.Y + 14  -- 上下 padding 各 6 + 邊框 2
+        local newH = bounds.Y + 14  
         explainLabel.Size = UDim2.new(1, -12, 0, bounds.Y)
         textRow.Size = UDim2.new(1, 0, 0, newH)
     end)
 end
 
--- 首次更新（等 UI 佈局完成）
 task.delay(0.1, refreshExplainHeight)
 
 fontSizeInput.FocusLost:Connect(function()
@@ -1385,9 +1309,6 @@ enableDrag(miniFrame, miniFrame)
 minimizeBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false; miniFrame.Visible = true end)
 expandBtn.MouseButton1Click:Connect(function() miniFrame.Visible = false; mainFrame.Visible = true end)
 
--- ============================================================
--- 關閉
--- ============================================================
 closeBtn.MouseButton1Click:Connect(function()
     local threads = {knockThread, stunThread, berserkThread, quakeThread, quakerThread, fixPosThread, lockPosThread}
     for _, t in ipairs(threads) do
@@ -1396,4 +1317,4 @@ closeBtn.MouseButton1Click:Connect(function()
     screenGui:Destroy()
 end)
 
-print("貓玲的地震區手套腳本已載入！")
+print("貓玲的地震區手套腳本已載入！(修正按鈕位置)")
