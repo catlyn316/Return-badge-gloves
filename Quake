@@ -1,4 +1,4 @@
--- 貓玲的地震區手套腳本 v1.3 (internal)
+-- 貓玲的地震區手套腳本 v1.4 (internal)
 -- 分區：動能 / 狂暴 / 地震 / 其他 / 說明
 
 local CoreGui           = game:GetService("CoreGui")
@@ -146,31 +146,60 @@ closeBtn.Parent = titleBar
 Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 5)
 
 -- ============================================================
--- 分頁按鈕列（5個）
+-- 分頁按鈕列（可橫向滑動，同時顯示約 3.5 個）
 -- ============================================================
-local tabNames = {"動能","狂暴","地震","其他","說明"}
+local tabNames = {"動能","狂暴","地震","破地者","其他","說明"}
+
+-- 外層裁切框（寬度固定，超出部分隱藏）
 local tabBar = Instance.new("Frame")
 tabBar.Size = UDim2.new(0.95, 0, 0, 26)
 tabBar.Position = UDim2.new(0.025, 0, 0, 36)
 tabBar.BackgroundColor3 = THEME.tabBg
+tabBar.ClipsDescendants = true
 tabBar.Parent = mainFrame
 Instance.new("UICorner", tabBar).CornerRadius = UDim.new(0, 6)
+
+-- 內層可滑動的 ScrollingFrame
+local tabScroll = Instance.new("ScrollingFrame")
+tabScroll.Size = UDim2.new(1, 0, 1, 0)
+tabScroll.BackgroundTransparency = 1
+tabScroll.BorderSizePixel = 0
+tabScroll.ScrollBarThickness = 0          -- 隱藏滾動條，靠手指/滑鼠拖動
+tabScroll.ScrollingDirection = Enum.ScrollingDirection.X
+tabScroll.AutomaticCanvasSize = Enum.AutomaticSize.X
+tabScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+tabScroll.Parent = tabBar
+
+local tabInner = Instance.new("Frame")
+tabInner.Size = UDim2.new(0, 0, 1, 0)    -- 寬度由 UIListLayout 自動撐開
+tabInner.AutomaticSize = Enum.AutomaticSize.X
+tabInner.BackgroundTransparency = 1
+tabInner.Parent = tabScroll
+
 local tabLayout = Instance.new("UIListLayout")
 tabLayout.FillDirection = Enum.FillDirection.Horizontal
-tabLayout.Padding = UDim.new(0, 2)
-tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+tabLayout.Padding = UDim.new(0, 3)
 tabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-tabLayout.Parent = tabBar
+tabLayout.Parent = tabInner
+
+local tabPad = Instance.new("UIPadding")
+tabPad.PaddingLeft  = UDim.new(0, 3)
+tabPad.PaddingRight = UDim.new(0, 3)
+tabPad.Parent = tabInner
+
+-- 每個 tab 寬度設為讓視窗剛好顯示 3.5 個
+-- 視窗可視寬 ≈ 266px（280 * 0.95），3.5 個 + 間隔 → 每個約 72px
+local TAB_W = 72
 
 local tabButtons = {}
 for i, name in ipairs(tabNames) do
     local tb = Instance.new("TextButton")
-    tb.Size = UDim2.new(0, 48, 0, 22)
+    tb.Size = UDim2.new(0, TAB_W, 0, 22)
     tb.BackgroundColor3 = THEME.tabBg
     tb.Text = name; tb.TextSize = 11
     tb.Font = Enum.Font.GothamBold
     tb.TextColor3 = THEME.textMuted
-    tb.Parent = tabBar
+    tb.Parent = tabInner
     Instance.new("UICorner", tb).CornerRadius = UDim.new(0, 4)
     tabButtons[i] = tb
 end
@@ -207,7 +236,7 @@ local function createPage()
 end
 
 local pages = {}
-for i = 1, 5 do pages[i] = createPage() end
+for i = 1, 6 do pages[i] = createPage() end
 pages[1].Visible = true
 
 local function switchTab(n)
@@ -871,12 +900,192 @@ quakeBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ============================================================
--- 頁面4：其他
+-- 頁面4：破地者
 -- ============================================================
 local p4 = pages[4]
 
--- ── 4-1 固定位置 ─────────────────────────────────────────────
-local r41 = makeRow(p4, 1, 34)
+-- ── 4-1 蓄力+釋放 ────────────────────────────────────────────
+local r41q = makeRow(p4, 1, 34)
+makeLabel(r41q, "蓄力+釋放:", 6, 0, 92, 34)
+local quakerStatusLabel = Instance.new("TextLabel")
+quakerStatusLabel.Size = UDim2.new(0, 90, 0, 22)
+quakerStatusLabel.Position = UDim2.new(0, 100, 0, 6)
+quakerStatusLabel.BackgroundTransparency = 1
+quakerStatusLabel.Text = "待機"
+quakerStatusLabel.TextSize = 11; quakerStatusLabel.Font = Enum.Font.Gotham
+quakerStatusLabel.TextColor3 = THEME.textMuted
+quakerStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+quakerStatusLabel.Parent = r41q
+local quakerBtn = makeButton(r41q, "啟動", 222, 5, 42, 24)
+
+local quakerRunning = false
+local quakerThread  = nil
+
+local function resetQuakerUI()
+    quakerRunning = false; quakerThread = nil
+    quakerBtn.Text = "啟動"; quakerBtn.BackgroundColor3 = THEME.primary
+    r41q.BackgroundColor3 = THEME.bgRow
+    quakerStatusLabel.Text = "待機"; quakerStatusLabel.TextColor3 = THEME.textMuted
+    -- 確保速度恢復（若偵測中途停止）
+    pcall(function()
+        local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+        if hum then hum.WalkSpeed = 20 end
+    end)
+    activeFeatures["破地者"] = false; updateStatus()
+end
+
+quakerBtn.MouseButton1Click:Connect(function()
+    quakerRunning = not quakerRunning
+    if quakerRunning then
+        quakerBtn.Text = "停止"; quakerBtn.BackgroundColor3 = THEME.red
+        r41q.BackgroundColor3 = Color3.fromRGB(20, 8, 4)
+        activeFeatures["破地者"] = true; updateStatus()
+
+        quakerThread = task.spawn(function()
+            -- 蓄力
+            quakerStatusLabel.Text = "蓄力中…"; quakerStatusLabel.TextColor3 = THEME.accent
+            pcall(function()
+                ReplicatedStorage.QuakeQuake:FireServer({start = true})
+            end)
+
+            -- 等待 3 秒蓄力
+            local chargeEnd = tick() + 3
+            while tick() < chargeEnd and quakerRunning do
+                local rem = math.ceil(chargeEnd - tick())
+                quakerStatusLabel.Text = "蓄力 " .. rem .. "s…"
+                task.wait(0.2)
+            end
+            if not quakerRunning then resetQuakerUI() return end
+
+            -- 偵測期間固定速度為 25
+            pcall(function()
+                local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+                if hum then hum.WalkSpeed = 25 end
+            end)
+
+            -- 等待：除自己外 3 個或以上玩家在任意 30 單位圓內
+            quakerStatusLabel.Text = "等待3人聚集…"; quakerStatusLabel.TextColor3 = THEME.textSub
+
+            local centerPos = nil
+            local targetGroup = {}
+
+            while quakerRunning do
+                -- 對所有玩家兩兩檢查，找出涵蓋最多人的圓心
+                local others = {}
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                        table.insert(others, p)
+                    end
+                end
+
+                -- 以每個玩家位置為候選圓心，統計 30 單位內的人數
+                local bestCenter = nil
+                local bestGroup  = {}
+                for _, anchor in ipairs(others) do
+                    local aPos = anchor.Character.HumanoidRootPart.Position
+                    local group = {}
+                    for _, other in ipairs(others) do
+                        local oPos = other.Character.HumanoidRootPart.Position
+                        if (oPos - aPos).Magnitude <= 30 then
+                            table.insert(group, other)
+                        end
+                    end
+                    if #group >= 3 and #group > #bestGroup then
+                        bestGroup  = group
+                        bestCenter = aPos
+                    end
+                end
+
+                if bestCenter then
+                    -- 計算真正的群組幾何中心
+                    local sum = Vector3.new(0, 0, 0)
+                    for _, p in ipairs(bestGroup) do
+                        sum = sum + p.Character.HumanoidRootPart.Position
+                    end
+                    centerPos   = sum / #bestGroup
+                    targetGroup = bestGroup
+                    break
+                end
+
+                quakerStatusLabel.Text = string.format("等待3人聚集…(%d人)", #others)
+                task.wait(0.3)
+            end
+            if not quakerRunning then resetQuakerUI() return end
+
+            -- 移動到圓心並釋放
+            quakerStatusLabel.Text = "移動+釋放！"; quakerStatusLabel.TextColor3 = Color3.fromRGB(255, 80, 0)
+            local char = player.Character
+            local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                pcall(function() hrp.CFrame = CFrame.new(centerPos) end)
+            end
+            task.wait(0.05)
+            pcall(function()
+                ReplicatedStorage.QuakeQuake:FireServer({finished = true})
+            end)
+
+            -- 釋放後速度改回 20
+            pcall(function()
+                local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+                if hum then hum.WalkSpeed = 20 end
+            end)
+
+            -- 0.5 秒後，背對 (0,0,0) 傳送到第一個目標並攻擊
+            task.wait(0.5)
+            if not quakerRunning then resetQuakerUI() return end
+
+            quakerStatusLabel.Text = "攻擊中…"; quakerStatusLabel.TextColor3 = THEME.red
+
+            -- 攻擊所有目標（背對世界原點 (0,0,0)）
+            for idx, tgt in ipairs(targetGroup) do
+                if not quakerRunning then break end
+                local tgtChar = tgt.Character
+                local tgtRoot = tgtChar and tgtChar:FindFirstChild("HumanoidRootPart")
+                local tgtHead = tgtChar and tgtChar:FindFirstChild("Head")
+                if not tgtRoot or not tgtHead then continue end
+
+                -- 瞬移到目標，背對 (0,0,0)
+                pcall(function()
+                    local tgtPos = tgtRoot.Position
+                    -- 背對原點：面向方向是從原點指向目標，背對就是反過來
+                    local facingDir = (tgtPos - Vector3.new(0, 0, 0)).Unit
+                    local backCF    = CFrame.new(tgtPos, tgtPos + facingDir)
+                    hrp.CFrame = backCF
+                end)
+                task.wait(0.05)
+
+                -- GeneralHit
+                pcall(function()
+                    local wsChar = Workspace:FindFirstChild(tgt.Name)
+                    local wsHead = wsChar and wsChar:FindFirstChild("Head")
+                    if wsHead then
+                        ReplicatedStorage.GeneralHit:FireServer(wsHead)
+                    end
+                end)
+
+                quakerStatusLabel.Text = "攻擊 " .. tgt.Name
+                if idx < #targetGroup then
+                    task.wait(0.8)
+                end
+            end
+
+            quakerStatusLabel.Text = "完成 ✅"; quakerStatusLabel.TextColor3 = THEME.green
+            task.wait(1.5)
+            resetQuakerUI()
+        end)
+    else
+        if quakerThread then task.cancel(quakerThread) quakerThread = nil end
+        resetQuakerUI()
+    end
+end)
+
+-- ============================================================
+-- 頁面5：其他
+-- ============================================================
+local pOther = pages[5]
+
+-- ── 5-1 固定位置 ─────────────────────────────────────────────
+local r41 = makeRow(pOther, 1, 34)
 makeLabel(r41, "固定位置:", 6, 0, 100, 34)
 local fixPosBtn = makeButton(r41, "啟動", 222, 5, 42, 24)
 
@@ -884,8 +1093,8 @@ local fixPosRunning = false
 local fixPosThread  = nil
 local fixPosSaved   = nil
 
--- ── 4-2 目標鎖定位置 ─────────────────────────────────────────
-local r42 = makeRow(p4, 2, 100)
+-- ── 5-2 目標鎖定位置 ─────────────────────────────────────────
+local r42 = makeRow(pOther, 2, 100)
 makeLabel(r42, "目標鎖定:", 6, 0, 72, 34)
 local lockTargetInput = makeInput(r42, "玩家名", 80, 6, 96)
 
@@ -1036,9 +1245,9 @@ lockPosBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ============================================================
--- 頁面5：說明
+-- 頁面6：說明
 -- ============================================================
-local p5 = pages[5]
+local p5 = pages[6]
 
 -- 字體大小設定列
 local rFont = makeRow(p5, 1, 34)
@@ -1061,7 +1270,12 @@ local EXPLAIN_TEXT =
     "即可讓用狂暴的玩家獲得地震。\n" ..
     "可先讓目標設定當前位置後，再試用組合能力確定目標被Woah擊飛的軌跡，" ..
     "在落地點設定揮棒位置，再讓目標傳送回原本位置，" ..
-    "讓目標面向揮棒的位置後再用組合能力，這樣應該就能得到地震手套了。"
+    "讓目標面向揮棒的位置後再用組合能力，這樣應該就能得到地震手套了。\n\n" ..
+    "【破地者解法】\n" ..
+    "用地震一次埋了3個人並都打下虛空即可獲得。\n" ..
+    "要用腳本的要先進紅門，腳本開啟後會蓄力3秒，" ..
+    "之後會等除自己外的3個或以上的玩家進入同個30單位內的圓，" ..
+    "然後移動到圓心釋放並背對中心攻擊（可能還是找3個好友幫更好）。"
 
 -- ── 修復說明文字消失問題 ─────────────────────────────────────
 -- 原因：Frame 設了 AutomaticSize=Y，但 TextLabel 也設了 AutomaticSize=Y，
@@ -1173,7 +1387,7 @@ expandBtn.MouseButton1Click:Connect(function() miniFrame.Visible = false; mainFr
 -- 關閉
 -- ============================================================
 closeBtn.MouseButton1Click:Connect(function()
-    local threads = {knockThread, stunThread, berserkThread, quakeThread, fixPosThread, lockPosThread}
+    local threads = {knockThread, stunThread, berserkThread, quakeThread, quakerThread, fixPosThread, lockPosThread}
     for _, t in ipairs(threads) do
         if t then pcall(function() task.cancel(t) end) end
     end
