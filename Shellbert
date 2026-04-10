@@ -1,0 +1,746 @@
+-- 貓玲的Shellbert腳本 v1.0
+-- 整合版本 - Eggdog、Eggler、Shellbert功能
+
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TeleportService = game:GetService("TeleportService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- 清理舊GUI
+if CoreGui:FindFirstChild("MainUI") then CoreGui.MainUI:Destroy() end
+if playerGui:FindFirstChild("MainUI") then playerGui.MainUI:Destroy() end
+
+-- 變數
+local toggles = {
+    flying = false,
+}
+local flySpeed = 3
+local currentTeleportIndex = 1
+
+-- 傳送點坐標
+local teleportPoints = {
+    {X = -122.25, Y = 654.06, Z = -676.00},
+    {X = -258.88, Y = 705.88, Z = -862.55},
+    {X = -258.58, Y = 760.65, Z = -921.49},
+    {X = -110.14, Y = 678.93, Z = -1137.86},
+    {X = 89.13, Y = 593.63, Z = -1126.38},
+    {X = 60.84, Y = 626.57, Z = -664.81}
+}
+
+-- 飛行相關變數
+local flyConnection = nil
+local flyBG = nil
+local flyBV = nil
+local ctrl = {f = 0, b = 0, l = 0, r = 0}
+
+-- 安全傳送函數
+local function safeTeleport(x, y, z)
+    pcall(function()
+        local char = player.Character
+        if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+        local hrp = char.HumanoidRootPart
+        hrp.CFrame = CFrame.new(x, y, z)
+        task.wait(0.05)
+    end)
+end
+
+-- 飛行功能
+local function startFlying()
+    pcall(function()
+        local char = player.Character
+        if not char then return end
+        
+        local humanoid = char:FindFirstChildWhichIsA("Humanoid")
+        if not humanoid then return end
+        
+        -- 禁用動畫
+        char.Animate.Disabled = true
+        for _, track in pairs(humanoid:GetPlayingAnimationTracks()) do
+            track:AdjustSpeed(0)
+        end
+        
+        -- 設置人形狀態
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Flying, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Landed, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Running, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.RunningNoPhysics, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.StrafingNoPhysics, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
+        humanoid:ChangeState(Enum.HumanoidStateType.Swimming)
+        
+        local torso = char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
+        if not torso then return end
+        
+        -- 創建飛行控制
+        flyBG = Instance.new("BodyGyro", torso)
+        flyBG.P = 9e4
+        flyBG.maxTorque = Vector3.new(9e9, 9e9, 9e9)
+        flyBG.cframe = torso.CFrame
+        
+        flyBV = Instance.new("BodyVelocity", torso)
+        flyBV.velocity = Vector3.new(0, 0.1, 0)
+        flyBV.maxForce = Vector3.new(9e9, 9e9, 9e9)
+        
+        humanoid.PlatformStand = true
+        
+        -- 飛行循環
+        local speed = 0
+        local lastctrl = {f = 0, b = 0, l = 0, r = 0}
+        local maxspeed = 50
+        
+        flyConnection = RunService.RenderStepped:Connect(function()
+            if not toggles.flying then return end
+            
+            if ctrl.l + ctrl.r ~= 0 or ctrl.f + ctrl.b ~= 0 then
+                speed = speed + 0.5 + (speed / maxspeed)
+                if speed > maxspeed then
+                    speed = maxspeed
+                end
+            elseif not (ctrl.l + ctrl.r ~= 0 or ctrl.f + ctrl.b ~= 0) and speed ~= 0 then
+                speed = speed - 1
+                if speed < 0 then
+                    speed = 0
+                end
+            end
+            
+            if (ctrl.l + ctrl.r) ~= 0 or (ctrl.f + ctrl.b) ~= 0 then
+                flyBV.velocity = ((Workspace.CurrentCamera.CoordinateFrame.lookVector * (ctrl.f + ctrl.b)) + 
+                    ((Workspace.CurrentCamera.CoordinateFrame * CFrame.new(ctrl.l + ctrl.r, (ctrl.f + ctrl.b) * 0.2, 0).p) - 
+                    Workspace.CurrentCamera.CoordinateFrame.p)) * speed * flySpeed
+                lastctrl = {f = ctrl.f, b = ctrl.b, l = ctrl.l, r = ctrl.r}
+            elseif (ctrl.l + ctrl.r) == 0 and (ctrl.f + ctrl.b) == 0 and speed ~= 0 then
+                flyBV.velocity = ((Workspace.CurrentCamera.CoordinateFrame.lookVector * (lastctrl.f + lastctrl.b)) + 
+                    ((Workspace.CurrentCamera.CoordinateFrame * CFrame.new(lastctrl.l + lastctrl.r, (lastctrl.f + lastctrl.b) * 0.2, 0).p) - 
+                    Workspace.CurrentCamera.CoordinateFrame.p)) * speed * flySpeed
+            else
+                flyBV.velocity = Vector3.new(0, 0, 0)
+            end
+            
+            flyBG.cframe = Workspace.CurrentCamera.CoordinateFrame * CFrame.Angles(-math.rad((ctrl.f + ctrl.b) * 50 * speed / maxspeed), 0, 0)
+        end)
+    end)
+end
+
+local function stopFlying()
+    pcall(function()
+        if flyConnection then
+            flyConnection:Disconnect()
+            flyConnection = nil
+        end
+        
+        if flyBG then flyBG:Destroy() flyBG = nil end
+        if flyBV then flyBV:Destroy() flyBV = nil end
+        
+        local char = player.Character
+        if char then
+            local humanoid = char:FindFirstChildWhichIsA("Humanoid")
+            if humanoid then
+                humanoid.PlatformStand = false
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.Flying, true)
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp, true)
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.Landed, true)
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, true)
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, true)
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.Running, true)
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.RunningNoPhysics, true)
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.StrafingNoPhysics, true)
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, true)
+                humanoid:ChangeState(Enum.HumanoidStateType.RunningNoPhysics)
+            end
+            char.Animate.Disabled = false
+        end
+        
+        ctrl = {f = 0, b = 0, l = 0, r = 0}
+    end)
+end
+
+-- 鍵盤控制
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed or not toggles.flying then return end
+    
+    if input.KeyCode == Enum.KeyCode.W then
+        ctrl.f = 1
+    elseif input.KeyCode == Enum.KeyCode.S then
+        ctrl.b = -1
+    elseif input.KeyCode == Enum.KeyCode.A then
+        ctrl.l = -1
+    elseif input.KeyCode == Enum.KeyCode.D then
+        ctrl.r = 1
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.W then
+        ctrl.f = 0
+    elseif input.KeyCode == Enum.KeyCode.S then
+        ctrl.b = 0
+    elseif input.KeyCode == Enum.KeyCode.A then
+        ctrl.l = 0
+    elseif input.KeyCode == Enum.KeyCode.D then
+        ctrl.r = 0
+    end
+end)
+
+-- UI 建構
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "MainUI"
+screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = true
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+screenGui.DisplayOrder = 10001
+
+local function parentUI(g)
+    local ok = pcall(function()
+        if gethui then g.Parent = gethui()
+        elseif CoreGui then g.Parent = CoreGui
+        else g.Parent = playerGui end
+    end)
+    if not ok then g.Parent = playerGui end
+end
+parentUI(screenGui)
+
+-- 主面板 (蛋黃色主題)
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 320, 0, 340)
+mainFrame.Position = UDim2.new(0, 20, 0, 80)
+mainFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
+
+-- 標題欄 (蛋黃色)
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 32)
+titleBar.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+titleBar.Parent = mainFrame
+Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 10)
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -60, 1, 0)
+title.BackgroundTransparency = 1
+title.Text = "貓玲的Shellbert腳本 v1.0"
+title.TextSize = 14
+title.Font = Enum.Font.GothamBold
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Parent = titleBar
+
+local minimizeButton = Instance.new("TextButton")
+minimizeButton.Size = UDim2.new(0, 24, 0, 24)
+minimizeButton.Position = UDim2.new(1, -54, 0, 4)
+minimizeButton.BackgroundColor3 = Color3.fromRGB(158, 158, 158)
+minimizeButton.Text = "─"
+minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+minimizeButton.Parent = titleBar
+Instance.new("UICorner", minimizeButton).CornerRadius = UDim.new(0, 5)
+
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0, 24, 0, 24)
+closeButton.Position = UDim2.new(1, -28, 0, 4)
+closeButton.BackgroundColor3 = Color3.fromRGB(244, 67, 54)
+closeButton.Text = "X"
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.Parent = titleBar
+Instance.new("UICorner", closeButton).CornerRadius = UDim.new(0, 5)
+
+-- 可滑動的分頁列容器
+local tabScrollContainer = Instance.new("Frame")
+tabScrollContainer.Size = UDim2.new(0.9, 0, 0, 28)
+tabScrollContainer.Position = UDim2.new(0.05, 0, 0, 38)
+tabScrollContainer.BackgroundColor3 = Color3.fromRGB(240, 240, 240)
+tabScrollContainer.Parent = mainFrame
+tabScrollContainer.ClipsDescendants = true
+Instance.new("UICorner", tabScrollContainer).CornerRadius = UDim.new(0, 6)
+
+local tabBar = Instance.new("ScrollingFrame")
+tabBar.Size = UDim2.new(1, 0, 1, 0)
+tabBar.BackgroundTransparency = 1
+tabBar.BorderSizePixel = 0
+tabBar.ScrollBarThickness = 0
+tabBar.CanvasSize = UDim2.new(0, 0, 0, 0)
+tabBar.AutomaticCanvasSize = Enum.AutomaticSize.X
+tabBar.ScrollingDirection = Enum.ScrollingDirection.X
+tabBar.Parent = tabScrollContainer
+
+local tabLayout = Instance.new("UIListLayout")
+tabLayout.FillDirection = Enum.FillDirection.Horizontal
+tabLayout.Padding = UDim.new(0, 4)
+tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
+tabLayout.Parent = tabBar
+
+local function createTab(text, order)
+    local tab = Instance.new("TextButton")
+    tab.Size = UDim2.new(0, 68, 0, 24)
+    tab.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+    tab.Text = text
+    tab.TextSize = 12
+    tab.Font = Enum.Font.GothamBold
+    tab.TextColor3 = Color3.fromRGB(100, 100, 100)
+    tab.LayoutOrder = order
+    tab.Parent = tabBar
+    Instance.new("UICorner", tab).CornerRadius = UDim.new(0, 4)
+    return tab
+end
+
+local tab1 = createTab("Eggdog", 1)
+local tab2 = createTab("Eggler", 2)
+local tab3 = createTab("Shellbert", 3)
+local tab4 = createTab("說明", 4)
+
+-- 內容容器
+local contentContainer = Instance.new("Frame")
+contentContainer.Size = UDim2.new(0.9, 0, 0, 250)
+contentContainer.Position = UDim2.new(0.05, 0, 0, 72)
+contentContainer.BackgroundTransparency = 1
+contentContainer.Parent = mainFrame
+contentContainer.ClipsDescendants = true
+
+local function createScrollingPage(parent)
+    local page = Instance.new("ScrollingFrame")
+    page.Size = UDim2.new(1, 0, 1, 0)
+    page.BackgroundTransparency = 1
+    page.BorderSizePixel = 0
+    page.ScrollBarThickness = 4
+    page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    page.Visible = false
+    page.Parent = parent
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 6)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    layout.Parent = page
+    local padding = Instance.new("UIPadding")
+    padding.PaddingRight = UDim.new(0, 6)
+    padding.Parent = page
+    return page
+end
+
+local page1 = createScrollingPage(contentContainer)
+local page2 = createScrollingPage(contentContainer)
+local page3 = createScrollingPage(contentContainer)
+local page4 = createScrollingPage(contentContainer)
+page1.Visible = true
+
+local function switchTab(n)
+    page1.Visible = (n == 1)
+    page2.Visible = (n == 2)
+    page3.Visible = (n == 3)
+    page4.Visible = (n == 4)
+    local tabs = {tab1, tab2, tab3, tab4}
+    for i, t in ipairs(tabs) do
+        t.BackgroundColor3 = (i == n) and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(200, 200, 200)
+        t.TextColor3 = (i == n) and Color3.new(1, 1, 1) or Color3.fromRGB(100, 100, 100)
+    end
+end
+
+tab1.MouseButton1Click:Connect(function() switchTab(1) end)
+tab2.MouseButton1Click:Connect(function() switchTab(2) end)
+tab3.MouseButton1Click:Connect(function() switchTab(3) end)
+tab4.MouseButton1Click:Connect(function() switchTab(4) end)
+switchTab(1)
+
+-- 通用建立按鈕行
+local function createRow(parent, labelText, btnText, order)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, 0, 0, 36)
+    frame.BackgroundColor3 = Color3.fromRGB(255, 250, 230)
+    frame.LayoutOrder = order or 0
+    frame.Parent = parent
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.50, -6, 1, 0)
+    label.Position = UDim2.new(0, 8, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = labelText
+    label.TextSize = 12
+    label.Font = Enum.Font.GothamBold
+    label.TextColor3 = Color3.fromRGB(60, 60, 60)
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 80, 0, 24)
+    btn.Position = UDim2.new(1, -88, 0, 6)
+    btn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+    btn.Text = btnText
+    btn.TextSize = 12
+    btn.Font = Enum.Font.GothamBold
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Parent = frame
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 5)
+
+    return frame, btn
+end
+
+-- ========================
+-- 分頁1: Eggdog
+-- ========================
+local autoEggFrame, autoEggBtn = createRow(page1, "自動拿蛋", "啟動", 1)
+autoEggBtn.MouseButton1Click:Connect(function()
+    pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/catlyn316/Auto-get-eggs-dude/refs/heads/main/Eggs%20yummy"))()
+        autoEggBtn.Text = "已執行"
+        autoEggBtn.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+        task.wait(1.5)
+        autoEggBtn.Text = "啟動"
+        autoEggBtn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+    end)
+end)
+
+local clickEggdogFrame, clickEggdogBtn = createRow(page1, "點擊Eggdog", "點擊", 2)
+clickEggdogBtn.MouseButton1Click:Connect(function()
+    pcall(function()
+        fireclickdetector(Workspace["EggTeleport"].ClickDetector)
+        clickEggdogBtn.Text = "已執行"
+        clickEggdogBtn.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+        task.wait(1.5)
+        clickEggdogBtn.Text = "點擊"
+        clickEggdogBtn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+    end)
+end)
+
+-- ========================
+-- 分頁2: Eggler
+-- ========================
+local goldenEgg1Frame, goldenEgg1Btn = createRow(page2, "拿第1個金蛋", "傳送", 1)
+goldenEgg1Btn.MouseButton1Click:Connect(function()
+    pcall(function()
+        local part = Workspace:WaitForChild("TrialCompletedPoints"):WaitForChild("Trial 2"):FindFirstChild("root")
+        if part then 
+            player.Character.HumanoidRootPart.CFrame = part.CFrame 
+            goldenEgg1Btn.Text = "已傳送"
+            goldenEgg1Btn.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+            task.wait(1.5)
+            goldenEgg1Btn.Text = "傳送"
+            goldenEgg1Btn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+        end
+    end)
+end)
+
+local goldenEgg2Frame, goldenEgg2Btn = createRow(page2, "拿第2個金蛋", "傳送", 2)
+goldenEgg2Btn.MouseButton1Click:Connect(function()
+    pcall(function()
+        local part = Workspace:WaitForChild("TrialCompletedPoints"):WaitForChild("Trial 3"):FindFirstChild("root")
+        if part then 
+            player.Character.HumanoidRootPart.CFrame = part.CFrame 
+            goldenEgg2Btn.Text = "已傳送"
+            goldenEgg2Btn.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+            task.wait(1.5)
+            goldenEgg2Btn.Text = "傳送"
+            goldenEgg2Btn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+        end
+    end)
+end)
+
+local goldenEgg3Frame, goldenEgg3Btn = createRow(page2, "拿第3個金蛋", "傳送", 3)
+goldenEgg3Btn.MouseButton1Click:Connect(function()
+    pcall(function()
+        local part = Workspace:WaitForChild("TrialCompletedPoints"):WaitForChild("Trial 1"):FindFirstChild("root")
+        if part then 
+            player.Character.HumanoidRootPart.CFrame = part.CFrame 
+            goldenEgg3Btn.Text = "已傳送"
+            goldenEgg3Btn.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+            task.wait(1.5)
+            goldenEgg3Btn.Text = "傳送"
+            goldenEgg3Btn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+        end
+    end)
+end)
+
+-- ========================
+-- 分頁3: Shellbert
+-- ========================
+local skipDialogueFrame, skipDialogueBtn = createRow(page3, "跳過對話+傳送", "執行", 1)
+skipDialogueBtn.MouseButton1Click:Connect(function()
+    pcall(function()
+        task.spawn(function()
+            ReplicatedStorage.Common.Dialogue.Remotes.TriggerDialogue:FireServer("AwardBadge")
+            task.wait(0.1)
+            
+            for i = 1, 6 do
+                ReplicatedStorage.Common.Dialogue.Remotes.ResondToDialogue:FireServer(1)
+                task.wait(0.1)
+            end
+            
+            task.wait(0.2)
+            local portal = Workspace:FindFirstChild("FourthTrialPortal")
+            if portal then
+                local portalPart = portal:FindFirstChild("Portal")
+                if portalPart then
+                    portalPart = portalPart:FindFirstChild("Portal")
+                    if portalPart and portalPart:FindFirstChild("TouchInterest") then
+                        firetouchinterest(player.Character.HumanoidRootPart, portalPart, 0)
+                        task.wait(0.1)
+                        firetouchinterest(player.Character.HumanoidRootPart, portalPart, 1)
+                    end
+                end
+            end
+        end)
+        
+        skipDialogueBtn.Text = "已執行"
+        skipDialogueBtn.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+        task.wait(1.5)
+        skipDialogueBtn.Text = "執行"
+        skipDialogueBtn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+    end)
+end)
+
+-- 飛行按鈕和速度控制
+local flyFrame = Instance.new("Frame")
+flyFrame.Size = UDim2.new(1, 0, 0, 70)
+flyFrame.BackgroundColor3 = Color3.fromRGB(255, 250, 230)
+flyFrame.LayoutOrder = 2
+flyFrame.Parent = page3
+Instance.new("UICorner", flyFrame).CornerRadius = UDim.new(0, 6)
+
+local flyLabel = Instance.new("TextLabel")
+flyLabel.Size = UDim2.new(0.50, -6, 0, 30)
+flyLabel.Position = UDim2.new(0, 8, 0, 5)
+flyLabel.BackgroundTransparency = 1
+flyLabel.Text = "開飛囉"
+flyLabel.TextSize = 12
+flyLabel.Font = Enum.Font.GothamBold
+flyLabel.TextColor3 = Color3.fromRGB(60, 60, 60)
+flyLabel.TextXAlignment = Enum.TextXAlignment.Left
+flyLabel.Parent = flyFrame
+
+local flyBtn = Instance.new("TextButton")
+flyBtn.Size = UDim2.new(0, 80, 0, 24)
+flyBtn.Position = UDim2.new(1, -88, 0, 8)
+flyBtn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+flyBtn.Text = "啟動"
+flyBtn.TextSize = 12
+flyBtn.Font = Enum.Font.GothamBold
+flyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+flyBtn.Parent = flyFrame
+Instance.new("UICorner", flyBtn).CornerRadius = UDim.new(0, 5)
+
+local speedLabel = Instance.new("TextLabel")
+speedLabel.Size = UDim2.new(0, 70, 0, 24)
+speedLabel.Position = UDim2.new(0, 8, 0, 40)
+speedLabel.BackgroundTransparency = 1
+speedLabel.Text = "飛行速度:"
+speedLabel.TextSize = 11
+speedLabel.Font = Enum.Font.Gotham
+speedLabel.TextColor3 = Color3.fromRGB(60, 60, 60)
+speedLabel.TextXAlignment = Enum.TextXAlignment.Left
+speedLabel.Parent = flyFrame
+
+local speedInput = Instance.new("TextBox")
+speedInput.Size = UDim2.new(0, 60, 0, 24)
+speedInput.Position = UDim2.new(0, 80, 0, 40)
+speedInput.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+speedInput.Text = "3"
+speedInput.TextSize = 11
+speedInput.Font = Enum.Font.Gotham
+speedInput.TextColor3 = Color3.fromRGB(60, 60, 60)
+speedInput.PlaceholderText = "1-10"
+speedInput.Parent = flyFrame
+Instance.new("UICorner", speedInput).CornerRadius = UDim.new(0, 4)
+
+speedInput.FocusLost:Connect(function()
+    local num = tonumber(speedInput.Text)
+    if num and num >= 1 and num <= 10 then
+        flySpeed = num
+    else
+        speedInput.Text = tostring(flySpeed)
+    end
+end)
+
+flyBtn.MouseButton1Click:Connect(function()
+    toggles.flying = not toggles.flying
+    
+    if toggles.flying then
+        flyBtn.Text = "停止"
+        flyBtn.BackgroundColor3 = Color3.fromRGB(244, 67, 54)
+        flyFrame.BackgroundColor3 = Color3.fromRGB(255, 230, 200)
+        startFlying()
+    else
+        flyBtn.Text = "啟動"
+        flyBtn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+        flyFrame.BackgroundColor3 = Color3.fromRGB(255, 250, 230)
+        stopFlying()
+    end
+end)
+
+local teleportMachineFrame, teleportMachineBtn = createRow(page3, "傳送到投蛋機", "傳送", 3)
+teleportMachineBtn.MouseButton1Click:Connect(function()
+    pcall(function()
+        local point = teleportPoints[currentTeleportIndex]
+        safeTeleport(point.X, point.Y, point.Z)
+        
+        currentTeleportIndex = currentTeleportIndex + 1
+        if currentTeleportIndex > #teleportPoints then
+            currentTeleportIndex = 1
+        end
+        
+        teleportMachineBtn.Text = "已傳送 " .. currentTeleportIndex - 1 .. "/6"
+        teleportMachineBtn.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+        task.wait(1.5)
+        teleportMachineBtn.Text = "傳送"
+        teleportMachineBtn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+    end)
+end)
+
+-- ========================
+-- 分頁4: 說明分區
+-- ========================
+local infoFrame = Instance.new("Frame")
+infoFrame.Size = UDim2.new(1, 0, 1, 0)
+infoFrame.BackgroundColor3 = Color3.fromRGB(255, 250, 230)
+infoFrame.LayoutOrder = 1
+infoFrame.Parent = page4
+Instance.new("UICorner", infoFrame).CornerRadius = UDim.new(0, 6)
+
+local infoText = Instance.new("TextLabel")
+infoText.Size = UDim2.new(1, -16, 1, -16)
+infoText.Position = UDim2.new(0, 8, 0, 8)
+infoText.BackgroundTransparency = 1
+infoText.Text = [[貓玲的Shellbert腳本 v1.0
+
+Eggdog分區：
+去hitman那接任務後按自動拿蛋,拿完後回來hitman接獎勵,然後點eggdog
+
+Eggler分區：
+傳送後跟前面那個蛋頭人對話,讓他把你變成蛋後用傳送拿到3個金蛋,再回來跟蛋頭人拿徽章
+
+Shellbert分區：
+有eggler的徽章後回來跟蛋頭人對話(可按跳過對話+傳送),想看對話的記得都點左邊第一個,看到黃門後走進去,然後你就要打蛋boss。
+
+建議直接開飛,如果有紅色的東西鎖定你時聽到蛋發射的聲音再躲,沒事時傳送到投蛋機,打白色拉桿讓他拉到底後打蛋籃讓他發射,然後傳送到下一個投蛋機,6個打完後boss會進2階段,這邊別飛太低就行,一直打他直到蛋頭人出來補刀。
+
+作者：貓玲
+版本：v1.0]]
+infoText.TextSize = 11
+infoText.Font = Enum.Font.Gotham
+infoText.TextColor3 = Color3.fromRGB(60, 60, 60)
+infoText.TextXAlignment = Enum.TextXAlignment.Left
+infoText.TextYAlignment = Enum.TextYAlignment.Top
+infoText.TextWrapped = true
+infoText.Parent = infoFrame
+
+-- 狀態列
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(0.9, 0, 0, 24)
+statusLabel.Position = UDim2.new(0.05, 0, 1, -30)
+statusLabel.BackgroundColor3 = Color3.fromRGB(255, 240, 200)
+statusLabel.Text = "系統就緒"
+statusLabel.TextSize = 11
+statusLabel.Font = Enum.Font.GothamBold
+statusLabel.TextColor3 = Color3.fromRGB(200, 150, 0)
+statusLabel.Parent = mainFrame
+Instance.new("UICorner", statusLabel).CornerRadius = UDim.new(0, 5)
+
+-- 拖曳功能
+local function enableDrag(frame, dragHandle)
+    local dragging = false
+    local dragInput, dragStart, startPos
+
+    local function update(input)
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(
+            startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y
+        )
+    end
+
+    dragHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or
+           input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    dragHandle.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or
+           input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            update(input)
+        end
+    end)
+end
+
+enableDrag(mainFrame, titleBar)
+
+-- 最小化
+local miniFrame = Instance.new("Frame")
+miniFrame.Size = UDim2.new(0, 220, 0, 32)
+miniFrame.Position = UDim2.new(0, 20, 0, 30)
+miniFrame.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+miniFrame.Visible = false
+miniFrame.Parent = screenGui
+Instance.new("UICorner", miniFrame).CornerRadius = UDim.new(0, 6)
+
+local miniTitle = Instance.new("TextLabel")
+miniTitle.Text = "貓玲的Shellbert腳本"
+miniTitle.Size = UDim2.new(1, -36, 1, 0)
+miniTitle.BackgroundTransparency = 1
+miniTitle.Font = Enum.Font.GothamBold
+miniTitle.TextSize = 13
+miniTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+miniTitle.Parent = miniFrame
+
+local expandButton = Instance.new("TextButton")
+expandButton.Text = "+"
+expandButton.Size = UDim2.new(0, 24, 0, 24)
+expandButton.Position = UDim2.new(1, -28, 0, 4)
+expandButton.BackgroundColor3 = Color3.fromRGB(255, 180, 0)
+expandButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+expandButton.Parent = miniFrame
+Instance.new("UICorner", expandButton).CornerRadius = UDim.new(0, 5)
+
+enableDrag(miniFrame, miniFrame)
+
+minimizeButton.MouseButton1Click:Connect(function()
+    mainFrame.Visible = false
+    miniFrame.Visible = true
+end)
+
+expandButton.MouseButton1Click:Connect(function()
+    miniFrame.Visible = false
+    mainFrame.Visible = true
+end)
+
+-- 關閉按鈕
+closeButton.MouseButton1Click:Connect(function()
+    toggles.flying = false
+    stopFlying()
+    screenGui:Destroy()
+end)
+
+print("貓玲的Shellbert腳本 v1.0 已載入!")
