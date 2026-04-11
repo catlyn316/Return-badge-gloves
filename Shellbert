@@ -20,7 +20,7 @@ local flySpeed = 3
 local currentTeleportIndex = 1
 local tpwalking = false
 local ctrl = {f = 0, b = 0, l = 0, r = 0}
-local globalFontSize = 15
+local globalFontSize = 12
 
 local teleportPoints = {
     {X = -122.25, Y = 654.06, Z = -676.00},
@@ -638,7 +638,11 @@ teleportMachineBtn.MouseButton1Click:Connect(function()
     end)
 end)
 
--- 說明頁：字體大小輸入框
+-- ============================================================
+-- 說明頁
+-- ============================================================
+
+-- 字體大小輸入框
 local fontSizeFrame = Instance.new("Frame")
 fontSizeFrame.Size = UDim2.new(1, 0, 0, 36)
 fontSizeFrame.BackgroundColor3 = Color3.fromRGB(248, 249, 250)
@@ -661,49 +665,15 @@ local fontSizeInput = Instance.new("TextBox")
 fontSizeInput.Size = UDim2.new(0, 70, 0, 24)
 fontSizeInput.Position = UDim2.new(1, -78, 0, 6)
 fontSizeInput.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-fontSizeInput.Text = "15"
+fontSizeInput.Text = "12"
 fontSizeInput.TextSize = 12
 fontSizeInput.Font = Enum.Font.Gotham
 fontSizeInput.TextColor3 = Color3.fromRGB(0, 0, 0)
 fontSizeInput.Parent = fontSizeFrame
 Instance.new("UICorner", fontSizeInput).CornerRadius = UDim.new(0, 5)
 
--- 說明文字框：使用 ScrollingFrame
-local infoFrame2 = Instance.new("ScrollingFrame")
-infoFrame2.Size = UDim2.new(1, 0, 0, 100)
-infoFrame2.BackgroundColor3 = Color3.fromRGB(248, 249, 250)
-infoFrame2.LayoutOrder = 2
-infoFrame2.BorderSizePixel = 0
-infoFrame2.ScrollBarThickness = 3
-infoFrame2.AutomaticCanvasSize = Enum.AutomaticSize.Y
-infoFrame2.Parent = page4
-Instance.new("UICorner", infoFrame2).CornerRadius = UDim.new(0, 6)
-
--- 說明文字框：使用 ScrollingFrame，但不用 LayoutOrder，用 Position
-local infoFrame2 = Instance.new("ScrollingFrame")
-infoFrame2.Size = UDim2.new(1, 0, 0, 134)  -- 固定合適高度
-infoFrame2.Position = UDim2.new(0, 0, 0, 40)  -- 在字體大小框下方
-infoFrame2.BackgroundColor3 = Color3.fromRGB(248, 249, 250)
-infoFrame2.LayoutOrder = 2
-infoFrame2.BorderSizePixel = 0
-infoFrame2.ScrollBarThickness = 3
-infoFrame2.CanvasSize = UDim2.new(0, 0, 0, 0)
-infoFrame2.AutomaticCanvasSize = Enum.AutomaticSize.Y
-infoFrame2.Parent = page4
-Instance.new("UICorner", infoFrame2).CornerRadius = UDim.new(0, 6)
-
-local infoPadding = Instance.new("UIPadding")
-infoPadding.PaddingLeft = UDim.new(0, 8)
-infoPadding.PaddingRight = UDim.new(0, 8)
-infoPadding.PaddingTop = UDim.new(0, 8)
-infoPadding.PaddingBottom = UDim.new(0, 8)
-infoPadding.Parent = infoFrame2
-
-local infoText = Instance.new("TextLabel")
-infoText.Size = UDim2.new(1, 0, 0, 0)
-infoText.BackgroundTransparency = 1
-infoText.AutomaticSize = Enum.AutomaticSize.Y
-infoText.Text = [[Eggdog分區：
+-- 說明文字區域（參考地震腳本結構）
+local EXPLAIN_TEXT = [[Eggdog分區：
 
 去hitman那接任務後按自動拿蛋
 拿完後回來hitman接獎勵
@@ -730,23 +700,52 @@ Shellbert分區：
 6個打完後boss會進2階段
 這邊別飛太低就行
 一直打他直到蛋頭人出來補刀]]
-infoText.TextSize = globalFontSize
-infoText.Font = Enum.Font.Gotham
-infoText.TextColor3 = Color3.fromRGB(60, 60, 60)
-infoText.TextXAlignment = Enum.TextXAlignment.Left
-infoText.TextYAlignment = Enum.TextYAlignment.Top
-infoText.TextWrapped = true
-infoText.Parent = infoFrame2
+
+local textRow = Instance.new("Frame")
+textRow.Size = UDim2.new(1, 0, 0, 10)
+textRow.BackgroundColor3 = Color3.fromRGB(248, 249, 250)
+textRow.LayoutOrder = 2
+textRow.AutomaticSize = Enum.AutomaticSize.None
+textRow.Parent = page4
+Instance.new("UICorner", textRow).CornerRadius = UDim.new(0, 6)
+
+local explainLabel = Instance.new("TextLabel")
+explainLabel.Size = UDim2.new(1, -12, 0, 10)
+explainLabel.Position = UDim2.new(0, 6, 0, 6)
+explainLabel.BackgroundTransparency = 1
+explainLabel.Text = EXPLAIN_TEXT
+explainLabel.TextSize = globalFontSize
+explainLabel.Font = Enum.Font.Gotham
+explainLabel.TextColor3 = Color3.fromRGB(60, 60, 60)
+explainLabel.TextXAlignment = Enum.TextXAlignment.Left
+explainLabel.TextYAlignment = Enum.TextYAlignment.Top
+explainLabel.TextWrapped = true
+explainLabel.Parent = textRow
+
+local function refreshExplainHeight()
+    task.defer(function()
+        local textService = game:GetService("TextService")
+        local bounds = textService:GetTextSize(
+            explainLabel.Text,
+            explainLabel.TextSize,
+            explainLabel.Font,
+            Vector2.new(explainLabel.AbsoluteSize.X > 10 and explainLabel.AbsoluteSize.X or 240, math.huge)
+        )
+        local newH = bounds.Y + 14
+        explainLabel.Size = UDim2.new(1, -12, 0, bounds.Y)
+        textRow.Size = UDim2.new(1, 0, 0, newH)
+    end)
+end
+
+task.delay(0.1, refreshExplainHeight)
 
 fontSizeInput.FocusLost:Connect(function()
-    local num = tonumber(fontSizeInput.Text)
-    if num and num >= 11 and num <= 48 then
-        globalFontSize = math.floor(num)
-        fontSizeInput.Text = tostring(globalFontSize)
-        infoText.TextSize = globalFontSize
-    else
-        fontSizeInput.Text = tostring(globalFontSize)
-    end
+    local v = tonumber(fontSizeInput.Text)
+    v = v and math.clamp(v, 8, 24) or 12
+    fontSizeInput.Text = tostring(v)
+    globalFontSize = v
+    explainLabel.TextSize = v
+    refreshExplainHeight()
 end)
 
 local statusLabel = Instance.new("TextLabel")
