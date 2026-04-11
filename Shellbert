@@ -1,4 +1,4 @@
--- 貓玲的Shellbert腳本 v1.1 修復版
+-- 貓玲的Shellbert腳本 v1.3
 -- 縮小版本 + 手機平板支援 + 自動修投蛋機 + me_ozone飛行整合
 
 local CoreGui = game:GetService("CoreGui")
@@ -20,6 +20,7 @@ local flySpeed = 3
 local currentTeleportIndex = 1
 local tpwalking = false
 local ctrl = {f = 0, b = 0, l = 0, r = 0}
+local globalFontSize = 15
 
 local teleportPoints = {
     {X = -122.25, Y = 654.06, Z = -676.00},
@@ -30,6 +31,30 @@ local teleportPoints = {
     {X = 60.84, Y = 626.57, Z = -664.81}
 }
 
+local function playRightHandAnimation()
+    pcall(function()
+        local char = player.Character
+        if not char then return end
+        
+        local humanoid = char:FindFirstChildWhichIsA("Humanoid")
+        if not humanoid then return end
+        
+        local animator = humanoid:FindFirstChild("Animator")
+        if not animator then return end
+        
+        local animID = "rbxassetid://471111855"
+        local anim = Instance.new("Animation")
+        anim.AnimationId = animID
+        
+        local track = animator:LoadAnimation(anim)
+        if track then
+            track:Play()
+            task.wait(0.3)
+            track:Stop()
+        end
+    end)
+end
+
 local function safeTeleport(x, y, z)
     pcall(function()
         local char = player.Character
@@ -37,6 +62,19 @@ local function safeTeleport(x, y, z)
         local hrp = char.HumanoidRootPart
         hrp.CFrame = CFrame.new(x, y, z)
         task.wait(0.05)
+    end)
+end
+
+local function unanchorCharacter()
+    pcall(function()
+        local char = player.Character
+        if not char then return end
+        
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Anchored = false
+            end
+        end
     end)
 end
 
@@ -173,6 +211,12 @@ end
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        if toggles.flying then
+            playRightHandAnimation()
+        end
+    end
+    
     if toggles.flying then
         if input.KeyCode == Enum.KeyCode.W then
             ctrl.f = 1
@@ -232,8 +276,8 @@ Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 10)
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -60, 1, 0)
 title.BackgroundTransparency = 1
-title.Text = "Shellbert v1.1"
-title.TextSize = 13
+title.Text = "貓玲的shellbert腳本"
+title.TextSize = 14
 title.Font = Enum.Font.GothamBold
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Parent = titleBar
@@ -244,6 +288,8 @@ minimizeButton.Position = UDim2.new(1, -54, 0, 4)
 minimizeButton.BackgroundColor3 = Color3.fromRGB(158, 158, 158)
 minimizeButton.Text = "-"
 minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+minimizeButton.TextSize = 12
+minimizeButton.Font = Enum.Font.GothamBold
 minimizeButton.Parent = titleBar
 Instance.new("UICorner", minimizeButton).CornerRadius = UDim.new(0, 5)
 
@@ -253,6 +299,8 @@ closeButton.Position = UDim2.new(1, -28, 0, 4)
 closeButton.BackgroundColor3 = Color3.fromRGB(244, 67, 54)
 closeButton.Text = "X"
 closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.TextSize = 12
+closeButton.Font = Enum.Font.GothamBold
 closeButton.Parent = titleBar
 Instance.new("UICorner", closeButton).CornerRadius = UDim.new(0, 5)
 
@@ -285,7 +333,7 @@ local function createTab(text, order)
     tab.Size = UDim2.new(0, 76, 0, 20)
     tab.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
     tab.Text = text
-    tab.TextSize = 10
+    tab.TextSize = 12
     tab.Font = Enum.Font.GothamBold
     tab.TextColor3 = Color3.fromRGB(100, 100, 100)
     tab.LayoutOrder = order
@@ -294,9 +342,9 @@ local function createTab(text, order)
     return tab
 end
 
-local tab1 = createTab("蛋狗", 1)
+local tab1 = createTab("eggdog", 1)
 local tab2 = createTab("金蛋", 2)
-local tab3 = createTab("蛋頭", 3)
+local tab3 = createTab("shellbert", 3)
 local tab4 = createTab("說明", 4)
 
 local contentContainer = Instance.new("Frame")
@@ -352,33 +400,33 @@ switchTab(1)
 
 local function createRow(parent, labelText, btnText, order)
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, 0, 0, 28)
-    frame.BackgroundColor3 = Color3.fromRGB(255, 250, 230)
+    frame.Size = UDim2.new(1, 0, 0, 36)
+    frame.BackgroundColor3 = Color3.fromRGB(248, 249, 250)
     frame.LayoutOrder = order or 0
     frame.Parent = parent
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 4)
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0.50, -4, 1, 0)
-    label.Position = UDim2.new(0, 6, 0, 0)
+    label.Size = UDim2.new(0.55, -6, 1, 0)
+    label.Position = UDim2.new(0, 8, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = labelText
-    label.TextSize = 10
+    label.TextSize = 13
     label.Font = Enum.Font.GothamBold
     label.TextColor3 = Color3.fromRGB(60, 60, 60)
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = frame
 
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 70, 0, 20)
-    btn.Position = UDim2.new(1, -76, 0, 4)
+    btn.Size = UDim2.new(0, 70, 0, 24)
+    btn.Position = UDim2.new(1, -78, 0, 6)
     btn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
     btn.Text = btnText
-    btn.TextSize = 10
+    btn.TextSize = 12
     btn.Font = Enum.Font.GothamBold
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     btn.Parent = frame
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 3)
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 5)
 
     return frame, btn
 end
@@ -452,7 +500,7 @@ goldenEgg3Btn.MouseButton1Click:Connect(function()
     end)
 end)
 
-local skipDialogueFrame, skipDialogueBtn = createRow(page3, "跳過傳送", "執行", 1)
+local skipDialogueFrame, skipDialogueBtn = createRow(page3, "跳過對話+傳送", "執行", 1)
 skipDialogueBtn.MouseButton1Click:Connect(function()
     pcall(function()
         task.spawn(function()
@@ -465,15 +513,15 @@ skipDialogueBtn.MouseButton1Click:Connect(function()
             end
             
             task.wait(0.2)
-            local portal = Workspace:FindFirstChild("FourthTrialPortal")
-            if portal then
-                local portalPart = portal:FindFirstChild("Portal")
-                if portalPart then
-                    portalPart = portalPart:FindFirstChild("Portal")
-                    if portalPart and portalPart:FindFirstChild("TouchInterest") then
-                        firetouchinterest(player.Character.HumanoidRootPart, portalPart, 0)
+            local portalTarget = Workspace:FindFirstChild("FourthTrialPortal")
+            if portalTarget then
+                portalTarget = portalTarget:FindFirstChild("Portal")
+                if portalTarget then
+                    portalTarget = portalTarget:FindFirstChild("Portal")
+                    if portalTarget then
+                        player.Character.HumanoidRootPart.CFrame = portalTarget.CFrame
                         task.wait(0.1)
-                        firetouchinterest(player.Character.HumanoidRootPart, portalPart, 1)
+                        unanchorCharacter()
                     end
                 end
             end
@@ -488,33 +536,33 @@ skipDialogueBtn.MouseButton1Click:Connect(function()
 end)
 
 local flyFrame = Instance.new("Frame")
-flyFrame.Size = UDim2.new(1, 0, 0, 32)
-flyFrame.BackgroundColor3 = Color3.fromRGB(255, 250, 230)
+flyFrame.Size = UDim2.new(1, 0, 0, 36)
+flyFrame.BackgroundColor3 = Color3.fromRGB(248, 249, 250)
 flyFrame.LayoutOrder = 2
 flyFrame.Parent = page3
-Instance.new("UICorner", flyFrame).CornerRadius = UDim.new(0, 4)
+Instance.new("UICorner", flyFrame).CornerRadius = UDim.new(0, 6)
 
 local flyLabel = Instance.new("TextLabel")
-flyLabel.Size = UDim2.new(0.50, -4, 1, 0)
-flyLabel.Position = UDim2.new(0, 6, 0, 0)
+flyLabel.Size = UDim2.new(0.55, -6, 1, 0)
+flyLabel.Position = UDim2.new(0, 8, 0, 0)
 flyLabel.BackgroundTransparency = 1
 flyLabel.Text = "飛行"
-flyLabel.TextSize = 10
+flyLabel.TextSize = 13
 flyLabel.Font = Enum.Font.GothamBold
 flyLabel.TextColor3 = Color3.fromRGB(60, 60, 60)
 flyLabel.TextXAlignment = Enum.TextXAlignment.Left
 flyLabel.Parent = flyFrame
 
 local flyBtn = Instance.new("TextButton")
-flyBtn.Size = UDim2.new(0, 70, 0, 20)
-flyBtn.Position = UDim2.new(1, -76, 0, 6)
+flyBtn.Size = UDim2.new(0, 70, 0, 24)
+flyBtn.Position = UDim2.new(1, -78, 0, 6)
 flyBtn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
 flyBtn.Text = "啟動"
-flyBtn.TextSize = 10
+flyBtn.TextSize = 12
 flyBtn.Font = Enum.Font.GothamBold
 flyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 flyBtn.Parent = flyFrame
-Instance.new("UICorner", flyBtn).CornerRadius = UDim.new(0, 3)
+Instance.new("UICorner", flyBtn).CornerRadius = UDim.new(0, 5)
 
 flyBtn.MouseButton1Click:Connect(function()
     toggles.flying = not toggles.flying
@@ -522,45 +570,44 @@ flyBtn.MouseButton1Click:Connect(function()
     if toggles.flying then
         flyBtn.Text = "停止"
         flyBtn.BackgroundColor3 = Color3.fromRGB(244, 67, 54)
-        flyFrame.BackgroundColor3 = Color3.fromRGB(255, 230, 200)
+        flyFrame.BackgroundColor3 = Color3.fromRGB(200, 230, 201)
         startFlying()
     else
         flyBtn.Text = "啟動"
         flyBtn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
-        flyFrame.BackgroundColor3 = Color3.fromRGB(255, 250, 230)
+        flyFrame.BackgroundColor3 = Color3.fromRGB(248, 249, 250)
         stopFlying()
     end
 end)
 
 local speedFrame = Instance.new("Frame")
-speedFrame.Size = UDim2.new(1, 0, 0, 32)
-speedFrame.BackgroundColor3 = Color3.fromRGB(255, 250, 230)
+speedFrame.Size = UDim2.new(1, 0, 0, 36)
+speedFrame.BackgroundColor3 = Color3.fromRGB(248, 249, 250)
 speedFrame.LayoutOrder = 3
 speedFrame.Parent = page3
-Instance.new("UICorner", speedFrame).CornerRadius = UDim.new(0, 4)
+Instance.new("UICorner", speedFrame).CornerRadius = UDim.new(0, 6)
 
 local speedLabel = Instance.new("TextLabel")
-speedLabel.Size = UDim2.new(0.50, -4, 1, 0)
-speedLabel.Position = UDim2.new(0, 6, 0, 0)
+speedLabel.Size = UDim2.new(0.55, -6, 1, 0)
+speedLabel.Position = UDim2.new(0, 8, 0, 0)
 speedLabel.BackgroundTransparency = 1
 speedLabel.Text = "飛行速度"
-speedLabel.TextSize = 10
+speedLabel.TextSize = 13
 speedLabel.Font = Enum.Font.GothamBold
 speedLabel.TextColor3 = Color3.fromRGB(60, 60, 60)
 speedLabel.TextXAlignment = Enum.TextXAlignment.Left
 speedLabel.Parent = speedFrame
 
 local speedInput = Instance.new("TextBox")
-speedInput.Size = UDim2.new(0, 70, 0, 20)
-speedInput.Position = UDim2.new(1, -76, 0, 6)
+speedInput.Size = UDim2.new(0, 70, 0, 24)
+speedInput.Position = UDim2.new(1, -78, 0, 6)
 speedInput.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 speedInput.Text = tostring(flySpeed)
-speedInput.TextSize = 10
+speedInput.TextSize = 12
 speedInput.Font = Enum.Font.Gotham
 speedInput.TextColor3 = Color3.fromRGB(0, 0, 0)
 speedInput.Parent = speedFrame
-Instance.new("UICorner", speedInput).CornerRadius = UDim.new(0, 3)
-Instance.new("UIStroke", speedInput).Thickness = 1
+Instance.new("UICorner", speedInput).CornerRadius = UDim.new(0, 5)
 
 speedInput.FocusLost:Connect(function()
     local num = tonumber(speedInput.Text)
@@ -591,81 +638,127 @@ teleportMachineBtn.MouseButton1Click:Connect(function()
     end)
 end)
 
-local autoFixFrame, autoFixBtn = createRow(page3, "修投蛋機", "啟動", 5)
-autoFixBtn.MouseButton1Click:Connect(function()
-    pcall(function()
-        local char = player.Character
-        if not char then return end
-        
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
-        
-        local found = 0
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if obj:IsA("ProximityPrompt") then
-                local distance = (obj.Parent.Position - hrp.Position).Magnitude
-                if distance < 50 then
-                    fireproximityprompt(obj)
-                    found = found + 1
-                    task.wait(0.2)
-                end
-            end
-        end
-        
-        autoFixBtn.Text = "✓" .. found
-        autoFixBtn.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
-        task.wait(1.5)
-        autoFixBtn.Text = "啟動"
-        autoFixBtn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
-    end)
-end)
+-- 說明頁：字體大小輸入框
+local fontSizeFrame = Instance.new("Frame")
+fontSizeFrame.Size = UDim2.new(1, 0, 0, 36)
+fontSizeFrame.BackgroundColor3 = Color3.fromRGB(248, 249, 250)
+fontSizeFrame.LayoutOrder = 1
+fontSizeFrame.Parent = page4
+Instance.new("UICorner", fontSizeFrame).CornerRadius = UDim.new(0, 6)
 
-local infoFrame = Instance.new("Frame")
-infoFrame.Size = UDim2.new(1, 0, 1, 0)
-infoFrame.BackgroundColor3 = Color3.fromRGB(255, 250, 230)
-infoFrame.LayoutOrder = 1
-infoFrame.Parent = page4
-Instance.new("UICorner", infoFrame).CornerRadius = UDim.new(0, 4)
+local fontSizeLabel = Instance.new("TextLabel")
+fontSizeLabel.Size = UDim2.new(0.55, -6, 1, 0)
+fontSizeLabel.Position = UDim2.new(0, 8, 0, 0)
+fontSizeLabel.BackgroundTransparency = 1
+fontSizeLabel.Text = "字體大小"
+fontSizeLabel.TextSize = 13
+fontSizeLabel.Font = Enum.Font.GothamBold
+fontSizeLabel.TextColor3 = Color3.fromRGB(60, 60, 60)
+fontSizeLabel.TextXAlignment = Enum.TextXAlignment.Left
+fontSizeLabel.Parent = fontSizeFrame
+
+local fontSizeInput = Instance.new("TextBox")
+fontSizeInput.Size = UDim2.new(0, 70, 0, 24)
+fontSizeInput.Position = UDim2.new(1, -78, 0, 6)
+fontSizeInput.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+fontSizeInput.Text = "15"
+fontSizeInput.TextSize = 12
+fontSizeInput.Font = Enum.Font.Gotham
+fontSizeInput.TextColor3 = Color3.fromRGB(0, 0, 0)
+fontSizeInput.Parent = fontSizeFrame
+Instance.new("UICorner", fontSizeInput).CornerRadius = UDim.new(0, 5)
+
+-- 說明文字框：使用 ScrollingFrame
+local infoFrame2 = Instance.new("ScrollingFrame")
+infoFrame2.Size = UDim2.new(1, 0, 0, 100)
+infoFrame2.BackgroundColor3 = Color3.fromRGB(248, 249, 250)
+infoFrame2.LayoutOrder = 2
+infoFrame2.BorderSizePixel = 0
+infoFrame2.ScrollBarThickness = 3
+infoFrame2.AutomaticCanvasSize = Enum.AutomaticSize.Y
+infoFrame2.Parent = page4
+Instance.new("UICorner", infoFrame2).CornerRadius = UDim.new(0, 6)
+
+-- 說明文字框：使用 ScrollingFrame，但不用 LayoutOrder，用 Position
+local infoFrame2 = Instance.new("ScrollingFrame")
+infoFrame2.Size = UDim2.new(1, 0, 0, 134)  -- 固定合適高度
+infoFrame2.Position = UDim2.new(0, 0, 0, 40)  -- 在字體大小框下方
+infoFrame2.BackgroundColor3 = Color3.fromRGB(248, 249, 250)
+infoFrame2.LayoutOrder = 2
+infoFrame2.BorderSizePixel = 0
+infoFrame2.ScrollBarThickness = 3
+infoFrame2.CanvasSize = UDim2.new(0, 0, 0, 0)
+infoFrame2.AutomaticCanvasSize = Enum.AutomaticSize.Y
+infoFrame2.Parent = page4
+Instance.new("UICorner", infoFrame2).CornerRadius = UDim.new(0, 6)
+
+local infoPadding = Instance.new("UIPadding")
+infoPadding.PaddingLeft = UDim.new(0, 8)
+infoPadding.PaddingRight = UDim.new(0, 8)
+infoPadding.PaddingTop = UDim.new(0, 8)
+infoPadding.PaddingBottom = UDim.new(0, 8)
+infoPadding.Parent = infoFrame2
 
 local infoText = Instance.new("TextLabel")
-infoText.Size = UDim2.new(1, -12, 1, -12)
-infoText.Position = UDim2.new(0, 6, 0, 6)
+infoText.Size = UDim2.new(1, 0, 0, 0)
 infoText.BackgroundTransparency = 1
-infoText.Text = [[v1.1 修復版
+infoText.AutomaticSize = Enum.AutomaticSize.Y
+infoText.Text = [[Eggdog分區：
 
-修改內容：
-✓ 縮小UI至合適尺寸
-✓ 分區欄可滑動(3.5格)
-✓ 飛行支援手機平板
-✓ 自動修投蛋機功能
-✓ 飛行速度調整輸入框
+去hitman那接任務後按自動拿蛋
+拿完後回來hitman接獎勵
+然後點eggdog
 
-操作提示：
-- WASD或移動方向鍵飛行
-- 自動修自動觸發50格內
-  所有ProximityPrompt
-- 滑動分區看更多功能
+Eggler分區：
 
-作者 貓玲
-版本 v1.1]]
-infoText.TextSize = 9
+傳送後跟前面那個蛋頭人對話
+讓他把你變成蛋後用傳送拿到3個金蛋
+再回來跟蛋頭人拿徽章
+
+Shellbert分區：
+
+有eggler的徽章後回來跟蛋頭人對話
+（可按跳過對話+傳送）
+想看對話的記得都點左邊第一個
+看到黃門後走進去
+然後你就要打蛋boss
+建議直接開飛
+如果有紅色的東西鎖定你時聽到蛋發射的聲音再躲
+沒事時傳送到投蛋機
+打白色拉桿讓他拉到底後打蛋籃讓他發射
+然後傳送到下一個投蛋機
+6個打完後boss會進2階段
+這邊別飛太低就行
+一直打他直到蛋頭人出來補刀]]
+infoText.TextSize = globalFontSize
 infoText.Font = Enum.Font.Gotham
 infoText.TextColor3 = Color3.fromRGB(60, 60, 60)
 infoText.TextXAlignment = Enum.TextXAlignment.Left
 infoText.TextYAlignment = Enum.TextYAlignment.Top
 infoText.TextWrapped = true
-infoText.Parent = infoFrame
+infoText.Parent = infoFrame2
+
+fontSizeInput.FocusLost:Connect(function()
+    local num = tonumber(fontSizeInput.Text)
+    if num and num >= 11 and num <= 48 then
+        globalFontSize = math.floor(num)
+        fontSizeInput.Text = tostring(globalFontSize)
+        infoText.TextSize = globalFontSize
+    else
+        fontSizeInput.Text = tostring(globalFontSize)
+    end
+end)
 
 local statusLabel = Instance.new("TextLabel")
-statusLabel.Size = UDim2.new(0.95, 0, 0, 18)
-statusLabel.Position = UDim2.new(0.025, 0, 1, -22)
-statusLabel.BackgroundColor3 = Color3.fromRGB(255, 240, 200)
-statusLabel.Text = "就緒"
-statusLabel.TextSize = 9
+statusLabel.Size = UDim2.new(0.9, 0, 0, 24)
+statusLabel.Position = UDim2.new(0.05, 0, 1, -30)
+statusLabel.BackgroundColor3 = Color3.fromRGB(200, 230, 201)
+statusLabel.Text = "系統就緒"
+statusLabel.TextSize = 11
 statusLabel.Font = Enum.Font.GothamBold
-statusLabel.TextColor3 = Color3.fromRGB(200, 150, 0)
+statusLabel.TextColor3 = Color3.fromRGB(46, 125, 50)
 statusLabel.Parent = mainFrame
-Instance.new("UICorner", statusLabel).CornerRadius = UDim.new(0, 4)
+Instance.new("UICorner", statusLabel).CornerRadius = UDim.new(0, 5)
 
 local function enableDrag(frame, dragHandle)
     local dragging = false
@@ -718,11 +811,11 @@ miniFrame.Parent = screenGui
 Instance.new("UICorner", miniFrame).CornerRadius = UDim.new(0, 6)
 
 local miniTitle = Instance.new("TextLabel")
-miniTitle.Text = "Shellbert v1.1"
+miniTitle.Text = "貓玲的shellbert腳本"
 miniTitle.Size = UDim2.new(1, -36, 1, 0)
 miniTitle.BackgroundTransparency = 1
 miniTitle.Font = Enum.Font.GothamBold
-miniTitle.TextSize = 12
+miniTitle.TextSize = 13
 miniTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 miniTitle.Parent = miniFrame
 
@@ -732,6 +825,8 @@ expandButton.Size = UDim2.new(0, 24, 0, 24)
 expandButton.Position = UDim2.new(1, -28, 0, 4)
 expandButton.BackgroundColor3 = Color3.fromRGB(255, 180, 0)
 expandButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+expandButton.TextSize = 12
+expandButton.Font = Enum.Font.GothamBold
 expandButton.Parent = miniFrame
 Instance.new("UICorner", expandButton).CornerRadius = UDim.new(0, 5)
 
@@ -752,4 +847,4 @@ closeButton.MouseButton1Click:Connect(function()
     screenGui:Destroy()
 end)
 
-print("Shellbert v1.1 已載入!")
+print("貓玲的Shellbert v1.3 已載入!")
