@@ -23,6 +23,32 @@ local manualAbsorbMaxCooldown = 6
 local fixedPosEnabled = true
 local fixedCFrame = nil
 
+local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
+
+-- 跳服相關
+local _visitedServers = {}
+local _VISIT_COOLDOWN = 120
+
+local function _markVisited(jobId)
+    _visitedServers[jobId] = tick()
+end
+
+local function _isRecentlyVisited(jobId)
+    local t = _visitedServers[jobId]
+    if t and (tick() - t) < _VISIT_COOLDOWN then return true end
+    return false
+end
+
+local function _cleanVisited()
+    local now = tick()
+    for id, t in pairs(_visitedServers) do
+        if now - t >= _VISIT_COOLDOWN then _visitedServers[id] = nil end
+    end
+end
+
+_markVisited(game.JobId)
+
 local function safeTeleport(x, y, z)
     pcall(function()
         local char = player.Character
@@ -59,13 +85,63 @@ local function noclipCharacter(shouldNoclip)
     end)
 end
 
-local function noclipCamera(shouldNoclip)
-    pcall(function()
-        local camera = Workspace.CurrentCamera
-        if camera:IsA("BasePart") then
-            camera.CanCollide = not shouldNoclip
+local function hopToLarge()
+    _cleanVisited()
+    local pid      = game.PlaceId
+    local cursor   = nil
+    local maxPages = 5
+    local allValid = {}
+
+    for page = 1, maxPages do
+        local url = "https://games.roblox.com/v1/games/" .. pid .. "/servers/Public?sortOrder=Desc&limit=100"
+        if cursor then
+            url = url .. "&cursor=" .. cursor
         end
-    end)
+
+        local ok, result = pcall(function()
+            return HttpService:JSONDecode(game:HttpGet(url))
+        end)
+
+        if not ok or not result or not result.data then
+            break
+        end
+
+        for _, s in ipairs(result.data) do
+            if s.id ~= game.JobId
+            and not _isRecentlyVisited(s.id)
+            and s.playing < s.maxPlayers then
+                table.insert(allValid, s)
+            end
+        end
+
+        if #allValid >= 50 then break end
+
+        cursor = result.nextPageCursor
+        if not cursor or cursor == "" then break end
+
+        task.wait(0.3)
+    end
+
+    if #allValid == 0 then
+        return nil, "找不到伺服器"
+    end
+
+    local maxCount    = allValid[1].playing
+    local targetCount = maxCount - 2
+    if targetCount < 0 then targetCount = 0 end
+
+    local pool = {}
+    for _, s in ipairs(allValid) do
+        if s.playing >= targetCount then
+            table.insert(pool, s)
+        end
+    end
+
+    if #pool == 0 then pool = allValid end
+
+    local pick = pool[math.random(1, #pool)]
+    _markVisited(pick.id)
+    return pick, nil
 end
 
 local screenGui = Instance.new("ScreenGui")
@@ -168,9 +244,23 @@ local function createTab(text, order)
     return tab
 end
 
-local tab1 = createTab("跑酷", 1)
-local tab2 = createTab("六角", 2)
-local tab3 = createTab("說明", 3)
+local function createTabEqual(text, order)
+    local tab = Instance.new("TextButton")
+    tab.Size = UDim2.new(1/3, -4, 1, 0)
+    tab.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+    tab.Text = text
+    tab.TextSize = 12
+    tab.Font = Enum.Font.GothamBold
+    tab.TextColor3 = Color3.fromRGB(100, 100, 100)
+    tab.LayoutOrder = order
+    tab.Parent = tabBar
+    Instance.new("UICorner", tab).CornerRadius = UDim.new(0, 3)
+    return tab
+end
+
+local tab1 = createTabEqual("跑酷", 1)
+local tab2 = createTabEqual("六角", 2)
+local tab3 = createTabEqual("說明", 3)
 
 local contentContainer = Instance.new("Frame")
 contentContainer.Size = UDim2.new(0.95, 0, 0, 180)
@@ -463,6 +553,33 @@ manualAbsorbBtn.MouseButton1Click:Connect(function()
     end
 end)
 
+-- 重進按鈕
+local rejoinFrame, rejoinBtn = createRow(page1, "重進", "執行", 4)
+rejoinBtn.MouseButton1Click:Connect(function()
+    pcall(function()
+        TeleportService:Teleport(game.PlaceId, player)
+    end)
+end)
+
+-- 傳送到多人服按鈕
+local largeServerFrame, largeServerBtn = createRow(page1, "傳送到多人服", "執行", 5)
+largeServerBtn.MouseButton1Click:Connect(function()
+    pcall(function()
+        largeServerBtn.Text = "搜尋中..."
+        task.spawn(function()
+            local pick, err = hopToLarge()
+            if err then
+                largeServerBtn.Text = "失敗"
+                task.wait(2)
+                largeServerBtn.Text = "執行"
+            else
+                largeServerBtn.Text = "傳送中"
+                TeleportService:TeleportToPlaceInstance(game.PlaceId, pick.id)
+            end
+        end)
+    end)
+end)
+
 -- ============================================================
 -- 六角分區
 -- ============================================================
@@ -483,9 +600,15 @@ end)
 -- 說明分區
 -- ============================================================
 
-local EXPLAIN_TEXT = [[要解跑酷的點變成石頭後
-要幫的點移動到石頭裡
-然後是以自己判斷對其他人用手動吸人
+local EXPLAIN_TEXT = [[要解跑酷的：
+1. 先點diamond
+2. 進紅門
+3. 按變成石頭
+
+要幫的：
+直接點移動到石頭裡
+
+然後以自己判斷對其他人用手動吸人
 
 要解六角的用附的腳本]]
 
@@ -632,3 +755,24 @@ closeButton.MouseButton1Click:Connect(function()
 end)
 
 print("貓玲的跑酷+六角腳本 v0.1 已載入!")
+
+-- ============================================================
+-- 跳服偵測：如果傳送到指定place id則執行腳本
+-- ============================================================
+local SPECIAL_PLACE_ID = 9872610052621
+local lastPlaceId = game.PlaceId
+
+task.spawn(function()
+    while true do
+        task.wait(1)
+        if game.PlaceId ~= lastPlaceId then
+            lastPlaceId = game.PlaceId
+            if game.PlaceId == SPECIAL_PLACE_ID then
+                print("[跳服偵測] 進入特殊遊戲，執行腳本...")
+                pcall(function()
+                    loadstring(game:HttpGet("https://raw.githubusercontent.com/catlyn316/Omg-catlyn-script-hub/refs/heads/main/%E8%B2%93%E7%8E%B2%E6%88%91%E6%9C%83%E5%81%9A%E8%A6%96%E7%AA%97%E8%85%B3%E6%9C%AC%E5%95%A6"))()
+                end)
+            end
+        end
+    end
+end)
