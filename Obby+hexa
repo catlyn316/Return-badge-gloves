@@ -1,4 +1,4 @@
--- 貓玲的跑酷+六角腳本 v0.1
+-- 貓玲的跑酷+六角腳本 v0.2
 -- 淡藍色主題 + 3分區 + 跑酷/六角功能
 
 local CoreGui = game:GetService("CoreGui")
@@ -9,6 +9,24 @@ local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- ============================================================
+-- 六角遊戲 PlaceId：吻合時只執行另外腳本，不建 GUI
+-- ============================================================
+local HEXA_GAME_PLACE_ID = 9872610052621
+local HEXA_SCRIPT_URL = "https://gist.githubusercontent.com/0-BaconScripter-0/7f1961f745ec16a72941a78087d968f2/raw/2005d288fa4a009ae55cc1fbf682b1a7d254b3e0/SB%2520Auto%2520Get%2520Hexa"
+local PARKOUR_HEXA_SCRIPT_URL = "https://raw.githubusercontent.com/catlyn316/Return-badge-gloves/refs/heads/main/Obby%2Bhexa"
+
+if game.PlaceId == HEXA_GAME_PLACE_ID then
+    task.spawn(function()
+        task.wait(1)
+        pcall(function()
+            loadstring(game:HttpGet(HEXA_SCRIPT_URL))()
+            print("✅ 偵測到六角遊戲，自動執行六角腳本")
+        end)
+    end)
+    return  -- 不繼續建立 GUI
+end
 
 if CoreGui:FindFirstChild("MainUI") then CoreGui.MainUI:Destroy() end
 if playerGui:FindFirstChild("MainUI") then playerGui.MainUI:Destroy() end
@@ -26,7 +44,9 @@ local fixedCFrame = nil
 local HttpService = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
 
+-- ============================================================
 -- 跳服相關
+-- ============================================================
 local _visitedServers = {}
 local _VISIT_COOLDOWN = 120
 
@@ -53,8 +73,7 @@ local function safeTeleport(x, y, z)
     pcall(function()
         local char = player.Character
         if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-        local hrp = char.HumanoidRootPart
-        hrp.CFrame = CFrame.new(x, y, z)
+        char.HumanoidRootPart.CFrame = CFrame.new(x, y, z)
         task.wait(0.05)
     end)
 end
@@ -63,11 +82,8 @@ local function unanchorCharacter()
     pcall(function()
         local char = player.Character
         if not char then return end
-        
         for _, part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.Anchored = false
-            end
+            if part:IsA("BasePart") then part.Anchored = false end
         end
     end)
 end
@@ -76,11 +92,8 @@ local function noclipCharacter(shouldNoclip)
     pcall(function()
         local char = player.Character
         if not char then return end
-        
         for _, part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = not shouldNoclip
-            end
+            if part:IsA("BasePart") then part.CanCollide = not shouldNoclip end
         end
     end)
 end
@@ -94,17 +107,13 @@ local function hopToLarge()
 
     for page = 1, maxPages do
         local url = "https://games.roblox.com/v1/games/" .. pid .. "/servers/Public?sortOrder=Desc&limit=100"
-        if cursor then
-            url = url .. "&cursor=" .. cursor
-        end
+        if cursor then url = url .. "&cursor=" .. cursor end
 
         local ok, result = pcall(function()
             return HttpService:JSONDecode(game:HttpGet(url))
         end)
 
-        if not ok or not result or not result.data then
-            break
-        end
+        if not ok or not result or not result.data then break end
 
         for _, s in ipairs(result.data) do
             if s.id ~= game.JobId
@@ -115,28 +124,19 @@ local function hopToLarge()
         end
 
         if #allValid >= 50 then break end
-
         cursor = result.nextPageCursor
         if not cursor or cursor == "" then break end
-
         task.wait(0.3)
     end
 
-    if #allValid == 0 then
-        return nil, "找不到伺服器"
-    end
+    if #allValid == 0 then return nil, "找不到伺服器" end
 
     local maxCount    = allValid[1].playing
-    local targetCount = maxCount - 2
-    if targetCount < 0 then targetCount = 0 end
-
+    local targetCount = math.max(0, maxCount - 2)
     local pool = {}
     for _, s in ipairs(allValid) do
-        if s.playing >= targetCount then
-            table.insert(pool, s)
-        end
+        if s.playing >= targetCount then table.insert(pool, s) end
     end
-
     if #pool == 0 then pool = allValid end
 
     local pick = pool[math.random(1, #pool)]
@@ -145,77 +145,34 @@ local function hopToLarge()
 end
 
 -- ============================================================
--- 遊戲傳送預隊列（提前宣告，在按鈕之前）
+-- Queue 函式
+-- 重進/跳服：只 queue 跑酷+六角腳本，不自動觸發六角腳本
+-- 六角按鈕：只 queue 六角腳本，且只在吻合六角 PlaceId 時才觸發
 -- ============================================================
 local function queueParkourHexaScript()
     local queueTeleport = queueonteleport or queue_on_teleport
     if not queueTeleport then return end
-    
     queueTeleport([[
 if not game:IsLoaded() then game.Loaded:Wait() end
 repeat task.wait() until game.Players.LocalPlayer
 task.wait(0.5)
-
-loadstring(game:HttpGet('https://raw.githubusercontent.com/catlyn316/Return-badge-gloves/refs/heads/main/Obby%2Bhexa'))()
+loadstring(game:HttpGet(']] .. PARKOUR_HEXA_SCRIPT_URL .. [['))()
 ]])
 end
-
--- 六角腳本自動 queue（供六角按鈕使用，傳送到六角遊戲時執行）
-local HEXA_GAME_PLACE_ID = 9872610052621
 
 local function queueHexaScript()
     local queueTeleport = queueonteleport or queue_on_teleport
     if not queueTeleport then return end
-    
     queueTeleport([[
 if not game:IsLoaded() then game.Loaded:Wait() end
 repeat task.wait() until game.Players.LocalPlayer
 task.wait(0.5)
-
-local pid = game.PlaceId
-if pid == 9872610052621 then
+if game.PlaceId == 9872610052621 then
     pcall(function()
-        loadstring(game:HttpGet("https://gist.githubusercontent.com/0-BaconScripter-0/7f1961f745ec16a72941a78087d968f2/raw/2005d288fa4a009ae55cc1fbf682b1a7d254b3e0/SB%2520Auto%2520Get%2520Hexa"))()
+        loadstring(game:HttpGet("]] .. HEXA_SCRIPT_URL .. [["))()
     end)
 end
 ]])
-end
-
--- 記錄當前遊戲的 place id（跑酷+六角遊戲）
-local PARKOUR_HEXA_PLACE_ID = game.PlaceId
-
-local function preQueueAutoHexaOnGameTeleport()
-    local queueTeleport = queueonteleport or queue_on_teleport
-    if not queueTeleport then return end
-    
-    queueTeleport([[
-if not game:IsLoaded() then game.Loaded:Wait() end
-repeat task.wait() until game.Players.LocalPlayer
-task.wait(0.5)
-
-local pid = game.PlaceId
--- 自動偵測：如果傳送到的是跑酷+六角遊戲，就執行六角腳本
-if pid == ]] .. PARKOUR_HEXA_PLACE_ID .. [[ then
-    pcall(function()
-        loadstring(game:HttpGet("https://gist.githubusercontent.com/0-BaconScripter-0/7f1961f745ec16a72941a78087d968f2/raw/2005d288fa4a009ae55cc1fbf682b1a7d254b3e0/SB%2520Auto%2520Get%2520Hexa"))()
-    end)
-end
-]])
-end
-
-preQueueAutoHexaOnGameTeleport()
-
--- ============================================================
--- 啟動時自動偵測：如果在六角遊戲就執行六角腳本
--- ============================================================
-if game.PlaceId == HEXA_GAME_PLACE_ID then
-    task.spawn(function()
-        task.wait(1)
-        pcall(function()
-            loadstring(game:HttpGet("https://gist.githubusercontent.com/0-BaconScripter-0/7f1961f745ec16a72941a78087d968f2/raw/2005d288fa4a009ae55cc1fbf682b1a7d254b3e0/SB%2520Auto%2520Get%2520Hexa"))()
-            print("✅ 偵測到六角遊戲，自動執行六角腳本")
-        end)
-    end)
 end
 
 -- ============================================================
@@ -306,20 +263,6 @@ tabLayout.FillDirection = Enum.FillDirection.Horizontal
 tabLayout.Padding = UDim.new(0, 2)
 tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
 tabLayout.Parent = tabBar
-
-local function createTab(text, order)
-    local tab = Instance.new("TextButton")
-    tab.Size = UDim2.new(0, 76, 0, 20)
-    tab.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
-    tab.Text = text
-    tab.TextSize = 12
-    tab.Font = Enum.Font.GothamBold
-    tab.TextColor3 = Color3.fromRGB(100, 100, 100)
-    tab.LayoutOrder = order
-    tab.Parent = tabBar
-    Instance.new("UICorner", tab).CornerRadius = UDim.new(0, 3)
-    return tab
-end
 
 local function createTabEqual(text, order)
     local tab = Instance.new("TextButton")
@@ -434,11 +377,9 @@ becomeRockBtn.MouseButton1Click:Connect(function()
                 task.wait(0.5)
             end
         end
-        
         safeTeleport(0, 0, 0)
         task.wait(0.5)
         ReplicatedStorage.Rockmode:FireServer()
-        
         becomeRockBtn.Text = "已執行"
         becomeRockBtn.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
         task.wait(1.5)
@@ -447,6 +388,7 @@ becomeRockBtn.MouseButton1Click:Connect(function()
     end)
 end)
 
+-- 移動到石頭裡
 local moveInRockFrame = Instance.new("Frame")
 moveInRockFrame.Size = UDim2.new(1, 0, 0, 36)
 moveInRockFrame.BackgroundColor3 = Color3.fromRGB(248, 249, 250)
@@ -476,25 +418,20 @@ moveInRockBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 moveInRockBtn.Parent = moveInRockFrame
 Instance.new("UICorner", moveInRockBtn).CornerRadius = UDim.new(0, 5)
 
-local moveInRockConnection = nil
-
 moveInRockBtn.MouseButton1Click:Connect(function()
     toggles.moveInRock = not toggles.moveInRock
-    
+
     if toggles.moveInRock then
         moveInRockBtn.Text = "關閉"
         moveInRockBtn.BackgroundColor3 = Color3.fromRGB(244, 67, 54)
         moveInRockFrame.BackgroundColor3 = Color3.fromRGB(200, 230, 201)
-        
+
         pcall(function()
             local char = player.Character
             if char then
                 local tool = char:FindFirstChildWhichIsA("Tool")
-                if tool then
-                    tool:Destroy()
-                end
+                if tool then tool:Destroy() end
             end
-            
             task.wait(0.1)
             fireclickdetector(Workspace.Lobby["Ghost"].ClickDetector)
             task.wait(0.3)
@@ -502,50 +439,38 @@ moveInRockBtn.MouseButton1Click:Connect(function()
             task.wait(0.1)
             fireclickdetector(Workspace.Lobby["Rocky"].ClickDetector)
             task.wait(0.1)
-            
             noclipCharacter(true)
-            
             safeTeleport(10, 0, 0)
-            
+
             local moveLoopConnection
             moveLoopConnection = RunService.RenderStepped:Connect(function()
-                if not toggles.moveInRock then
-                    moveLoopConnection:Disconnect()
-                    return
-                end
-                
-                local char = player.Character
-                if char and char:FindFirstChild("HumanoidRootPart") then
-                    local hrp = char.HumanoidRootPart
-                    local targetPos = Vector3.new(0, 0, 0)
-                    local direction = (targetPos - hrp.Position).Unit
-                    hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + direction)
+                if not toggles.moveInRock then moveLoopConnection:Disconnect(); return end
+                local c = player.Character
+                if c and c:FindFirstChild("HumanoidRootPart") then
+                    local hrp = c.HumanoidRootPart
+                    local dir = (Vector3.new(0, 0, 0) - hrp.Position).Unit
+                    hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + dir)
                 end
             end)
-            
+
             task.wait(0.2)
             ReplicatedStorage.RockyShoot:FireServer()
             task.wait(0.1)
             fireclickdetector(Workspace.Lobby["Za Hando"].ClickDetector)
-            
             task.wait(0.2)
+
             if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
                 fixedCFrame = player.Character.HumanoidRootPart.CFrame
                 fixedPosEnabled = true
             end
-            
+
             local holdLoopConnection
             holdLoopConnection = RunService.RenderStepped:Connect(function()
-                if not toggles.moveInRock then
-                    holdLoopConnection:Disconnect()
-                    return
-                end
-                
+                if not toggles.moveInRock then holdLoopConnection:Disconnect(); return end
                 if fixedPosEnabled and fixedCFrame then
-                    local char = player.Character
-                    if char and char:FindFirstChild("HumanoidRootPart") then
-                        local hrp = char.HumanoidRootPart
-                        hrp.CFrame = fixedCFrame
+                    local c = player.Character
+                    if c and c:FindFirstChild("HumanoidRootPart") then
+                        c.HumanoidRootPart.CFrame = fixedCFrame
                     end
                 end
             end)
@@ -554,7 +479,6 @@ moveInRockBtn.MouseButton1Click:Connect(function()
         moveInRockBtn.Text = "開啟"
         moveInRockBtn.BackgroundColor3 = Color3.fromRGB(173, 216, 230)
         moveInRockFrame.BackgroundColor3 = Color3.fromRGB(248, 249, 250)
-        
         toggles.moveInRock = false
         fixedPosEnabled = false
         fixedCFrame = nil
@@ -563,6 +487,7 @@ moveInRockBtn.MouseButton1Click:Connect(function()
     end
 end)
 
+-- 手動吸人
 local manualAbsorbFrame = Instance.new("Frame")
 manualAbsorbFrame.Size = UDim2.new(1, 0, 0, 36)
 manualAbsorbFrame.BackgroundColor3 = Color3.fromRGB(248, 249, 250)
@@ -610,16 +535,11 @@ manualAbsorbBtn.MouseButton1Click:Connect(function()
             fireclickdetector(Workspace.Lobby["Za Hando"].ClickDetector)
             task.wait(0.3)
             ReplicatedStorage.Erase:FireServer()
-            
             manualAbsorbCooldown = manualAbsorbMaxCooldown
             updateManualAbsorbButton()
-            
-            if cooldownConnection then
-                cooldownConnection:Disconnect()
-            end
-            
-            cooldownConnection = RunService.Heartbeat:Connect(function(deltaTime)
-                manualAbsorbCooldown = manualAbsorbCooldown - deltaTime
+            if cooldownConnection then cooldownConnection:Disconnect() end
+            cooldownConnection = RunService.Heartbeat:Connect(function(dt)
+                manualAbsorbCooldown = manualAbsorbCooldown - dt
                 if manualAbsorbCooldown <= 0 then
                     manualAbsorbCooldown = 0
                     cooldownConnection:Disconnect()
@@ -630,7 +550,7 @@ manualAbsorbBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- 重進按鈕
+-- 重進：只 queue 跑酷+六角腳本
 local rejoinFrame, rejoinBtn = createRow(page1, "重進", "執行", 4)
 rejoinBtn.MouseButton1Click:Connect(function()
     pcall(function()
@@ -639,7 +559,7 @@ rejoinBtn.MouseButton1Click:Connect(function()
     end)
 end)
 
--- 傳送到多人服按鈕
+-- 傳送到多人服：只 queue 跑酷+六角腳本
 local largeServerFrame, largeServerBtn = createRow(page1, "傳送到多人服", "執行", 5)
 largeServerBtn.MouseButton1Click:Connect(function()
     pcall(function()
@@ -661,18 +581,15 @@ end)
 
 -- ============================================================
 -- 六角分區
+-- 按下後 queue 六角腳本（只在六角遊戲 PlaceId 吻合時才觸發）
 -- ============================================================
 
 local hexaScriptFrame, hexaScriptBtn = createRow(page2, "另外腳本", "執行", 1)
 hexaScriptBtn.MouseButton1Click:Connect(function()
     pcall(function()
-        -- 預先 queue 六角腳本，之後任何傳送都會執行
-        queueHexaScript()
-        
-        -- 當前遊戲也立即執行一次
-        loadstring(game:HttpGet("https://gist.githubusercontent.com/0-BaconScripter-0/7f1961f745ec16a72941a78087d968f2/raw/2005d288fa4a009ae55cc1fbf682b1a7d254b3e0/SB%2520Auto%2520Get%2520Hexa"))()
-        
-        hexaScriptBtn.Text = "已執行（已queue）"
+        -- 無論在哪個遊戲都立即執行
+        loadstring(game:HttpGet(HEXA_SCRIPT_URL))()
+        hexaScriptBtn.Text = "已執行"
         hexaScriptBtn.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
         task.wait(1.5)
         hexaScriptBtn.Text = "執行"
@@ -719,17 +636,13 @@ local function refreshExplainHeight()
     task.defer(function()
         local textService = game:GetService("TextService")
         local bounds = textService:GetTextSize(
-            explainLabel.Text,
-            explainLabel.TextSize,
-            explainLabel.Font,
+            explainLabel.Text, explainLabel.TextSize, explainLabel.Font,
             Vector2.new(explainLabel.AbsoluteSize.X > 10 and explainLabel.AbsoluteSize.X or 240, math.huge)
         )
-        local newH = bounds.Y + 14
         explainLabel.Size = UDim2.new(1, -12, 0, bounds.Y)
-        textRow.Size = UDim2.new(1, 0, 0, newH)
+        textRow.Size = UDim2.new(1, 0, 0, bounds.Y + 14)
     end)
 end
-
 task.delay(0.1, refreshExplainHeight)
 
 local statusLabel = Instance.new("TextLabel")
@@ -743,6 +656,9 @@ statusLabel.TextColor3 = Color3.fromRGB(46, 125, 50)
 statusLabel.Parent = mainFrame
 Instance.new("UICorner", statusLabel).CornerRadius = UDim.new(0, 5)
 
+-- ============================================================
+-- 拖曳
+-- ============================================================
 local function enableDrag(frame, dragHandle)
     local dragging = false
     local dragInput, dragStart, startPos
@@ -762,29 +678,24 @@ local function enableDrag(frame, dragHandle)
             dragStart = input.Position
             startPos = frame.Position
             input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
             end)
         end
     end)
-
     dragHandle.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or
            input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
         end
     end)
-
     UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            update(input)
-        end
+        if input == dragInput and dragging then update(input) end
     end)
 end
 
 enableDrag(mainFrame, titleBar)
 
+-- 縮小視窗
 local miniFrame = Instance.new("Frame")
 miniFrame.Size = UDim2.new(0, 180, 0, 32)
 miniFrame.Position = UDim2.new(0, 20, 0, 30)
@@ -819,21 +730,17 @@ minimizeButton.MouseButton1Click:Connect(function()
     mainFrame.Visible = false
     miniFrame.Visible = true
 end)
-
 expandButton.MouseButton1Click:Connect(function()
     miniFrame.Visible = false
     mainFrame.Visible = true
 end)
-
 closeButton.MouseButton1Click:Connect(function()
     toggles.moveInRock = false
     fixedPosEnabled = false
     fixedCFrame = nil
     noclipCharacter(false)
-    if cooldownConnection then
-        cooldownConnection:Disconnect()
-    end
+    if cooldownConnection then cooldownConnection:Disconnect() end
     screenGui:Destroy()
 end)
 
-print("貓玲的跑酷+六角腳本 v0.1 已載入!")
+print("貓玲的跑酷+六角腳本 v0.2 已載入!")
