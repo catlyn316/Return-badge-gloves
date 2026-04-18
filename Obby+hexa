@@ -1,0 +1,634 @@
+-- 貓玲的跑酷+六角腳本 v0.1
+-- 淡藍色主題 + 3分區 + 跑酷/六角功能
+
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+if CoreGui:FindFirstChild("MainUI") then CoreGui.MainUI:Destroy() end
+if playerGui:FindFirstChild("MainUI") then playerGui.MainUI:Destroy() end
+
+local toggles = {
+    moveInRock = false,
+    manualAbsorb = false,
+}
+
+local manualAbsorbCooldown = 0
+local manualAbsorbMaxCooldown = 6
+local fixedPosEnabled = true
+local fixedCFrame = nil
+
+local function safeTeleport(x, y, z)
+    pcall(function()
+        local char = player.Character
+        if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+        local hrp = char.HumanoidRootPart
+        hrp.CFrame = CFrame.new(x, y, z)
+        task.wait(0.05)
+    end)
+end
+
+local function unanchorCharacter()
+    pcall(function()
+        local char = player.Character
+        if not char then return end
+        
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Anchored = false
+            end
+        end
+    end)
+end
+
+local function noclipCharacter(shouldNoclip)
+    pcall(function()
+        local char = player.Character
+        if not char then return end
+        
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = not shouldNoclip
+            end
+        end
+    end)
+end
+
+local function noclipCamera(shouldNoclip)
+    pcall(function()
+        local camera = Workspace.CurrentCamera
+        if camera:IsA("BasePart") then
+            camera.CanCollide = not shouldNoclip
+        end
+    end)
+end
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "MainUI"
+screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = true
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+screenGui.DisplayOrder = 10001
+
+local function parentUI(g)
+    local ok = pcall(function()
+        if gethui then g.Parent = gethui()
+        elseif CoreGui then g.Parent = CoreGui
+        else g.Parent = playerGui end
+    end)
+    if not ok then g.Parent = playerGui end
+end
+parentUI(screenGui)
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 280, 0, 260)
+mainFrame.Position = UDim2.new(0, 20, 0, 80)
+mainFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
+
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 32)
+titleBar.BackgroundColor3 = Color3.fromRGB(173, 216, 230)
+titleBar.Parent = mainFrame
+Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 10)
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -60, 1, 0)
+title.BackgroundTransparency = 1
+title.Text = "貓玲的跑酷+六角腳本"
+title.TextSize = 14
+title.Font = Enum.Font.GothamBold
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Parent = titleBar
+
+local minimizeButton = Instance.new("TextButton")
+minimizeButton.Size = UDim2.new(0, 24, 0, 24)
+minimizeButton.Position = UDim2.new(1, -54, 0, 4)
+minimizeButton.BackgroundColor3 = Color3.fromRGB(158, 158, 158)
+minimizeButton.Text = "-"
+minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+minimizeButton.TextSize = 12
+minimizeButton.Font = Enum.Font.GothamBold
+minimizeButton.Parent = titleBar
+Instance.new("UICorner", minimizeButton).CornerRadius = UDim.new(0, 5)
+
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0, 24, 0, 24)
+closeButton.Position = UDim2.new(1, -28, 0, 4)
+closeButton.BackgroundColor3 = Color3.fromRGB(244, 67, 54)
+closeButton.Text = "X"
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.TextSize = 12
+closeButton.Font = Enum.Font.GothamBold
+closeButton.Parent = titleBar
+Instance.new("UICorner", closeButton).CornerRadius = UDim.new(0, 5)
+
+local tabScrollContainer = Instance.new("Frame")
+tabScrollContainer.Size = UDim2.new(0.95, 0, 0, 24)
+tabScrollContainer.Position = UDim2.new(0.025, 0, 0, 38)
+tabScrollContainer.BackgroundColor3 = Color3.fromRGB(240, 240, 240)
+tabScrollContainer.Parent = mainFrame
+tabScrollContainer.ClipsDescendants = true
+Instance.new("UICorner", tabScrollContainer).CornerRadius = UDim.new(0, 6)
+
+local tabBar = Instance.new("ScrollingFrame")
+tabBar.Size = UDim2.new(1, 0, 1, 0)
+tabBar.BackgroundTransparency = 1
+tabBar.BorderSizePixel = 0
+tabBar.ScrollBarThickness = 0
+tabBar.CanvasSize = UDim2.new(0, 0, 0, 0)
+tabBar.AutomaticCanvasSize = Enum.AutomaticSize.X
+tabBar.ScrollingDirection = Enum.ScrollingDirection.X
+tabBar.Parent = tabScrollContainer
+
+local tabLayout = Instance.new("UIListLayout")
+tabLayout.FillDirection = Enum.FillDirection.Horizontal
+tabLayout.Padding = UDim.new(0, 2)
+tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
+tabLayout.Parent = tabBar
+
+local function createTab(text, order)
+    local tab = Instance.new("TextButton")
+    tab.Size = UDim2.new(0, 76, 0, 20)
+    tab.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+    tab.Text = text
+    tab.TextSize = 12
+    tab.Font = Enum.Font.GothamBold
+    tab.TextColor3 = Color3.fromRGB(100, 100, 100)
+    tab.LayoutOrder = order
+    tab.Parent = tabBar
+    Instance.new("UICorner", tab).CornerRadius = UDim.new(0, 3)
+    return tab
+end
+
+local tab1 = createTab("跑酷", 1)
+local tab2 = createTab("六角", 2)
+local tab3 = createTab("說明", 3)
+
+local contentContainer = Instance.new("Frame")
+contentContainer.Size = UDim2.new(0.95, 0, 0, 180)
+contentContainer.Position = UDim2.new(0.025, 0, 0, 66)
+contentContainer.BackgroundTransparency = 1
+contentContainer.Parent = mainFrame
+contentContainer.ClipsDescendants = true
+
+local function createScrollingPage(parent)
+    local page = Instance.new("ScrollingFrame")
+    page.Size = UDim2.new(1, 0, 1, 0)
+    page.BackgroundTransparency = 1
+    page.BorderSizePixel = 0
+    page.ScrollBarThickness = 3
+    page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    page.Visible = false
+    page.Parent = parent
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 4)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    layout.Parent = page
+    local padding = Instance.new("UIPadding")
+    padding.PaddingRight = UDim.new(0, 4)
+    padding.Parent = page
+    return page
+end
+
+local page1 = createScrollingPage(contentContainer)
+local page2 = createScrollingPage(contentContainer)
+local page3 = createScrollingPage(contentContainer)
+page1.Visible = true
+
+local function switchTab(n)
+    page1.Visible = (n == 1)
+    page2.Visible = (n == 2)
+    page3.Visible = (n == 3)
+    local tabs = {tab1, tab2, tab3}
+    for i, t in ipairs(tabs) do
+        t.BackgroundColor3 = (i == n) and Color3.fromRGB(173, 216, 230) or Color3.fromRGB(200, 200, 200)
+        t.TextColor3 = (i == n) and Color3.new(1, 1, 1) or Color3.fromRGB(100, 100, 100)
+    end
+end
+
+tab1.MouseButton1Click:Connect(function() switchTab(1) end)
+tab2.MouseButton1Click:Connect(function() switchTab(2) end)
+tab3.MouseButton1Click:Connect(function() switchTab(3) end)
+switchTab(1)
+
+local function createRow(parent, labelText, btnText, order)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, 0, 0, 36)
+    frame.BackgroundColor3 = Color3.fromRGB(248, 249, 250)
+    frame.LayoutOrder = order or 0
+    frame.Parent = parent
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.55, -6, 1, 0)
+    label.Position = UDim2.new(0, 8, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = labelText
+    label.TextSize = 13
+    label.Font = Enum.Font.GothamBold
+    label.TextColor3 = Color3.fromRGB(60, 60, 60)
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 70, 0, 24)
+    btn.Position = UDim2.new(1, -78, 0, 6)
+    btn.BackgroundColor3 = Color3.fromRGB(173, 216, 230)
+    btn.Text = btnText
+    btn.TextSize = 12
+    btn.Font = Enum.Font.GothamBold
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Parent = frame
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 5)
+
+    return frame, btn
+end
+
+-- ============================================================
+-- 跑酷分區
+-- ============================================================
+
+local becomeRockFrame, becomeRockBtn = createRow(page1, "場中變石頭", "執行", 1)
+becomeRockBtn.MouseButton1Click:Connect(function()
+    pcall(function()
+        local leaderstats = player:FindFirstChild("leaderstats")
+        if leaderstats and leaderstats:FindFirstChild("Glove") then
+            if leaderstats.Glove.Value ~= "Diamond" then
+                fireclickdetector(Workspace.Lobby["Diamond"].ClickDetector)
+                task.wait(0.5)
+            end
+        end
+        
+        safeTeleport(0, 0, 0)
+        task.wait(0.5)
+        ReplicatedStorage.Rockmode:FireServer()
+        
+        becomeRockBtn.Text = "已執行"
+        becomeRockBtn.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+        task.wait(1.5)
+        becomeRockBtn.Text = "執行"
+        becomeRockBtn.BackgroundColor3 = Color3.fromRGB(173, 216, 230)
+    end)
+end)
+
+local moveInRockFrame = Instance.new("Frame")
+moveInRockFrame.Size = UDim2.new(1, 0, 0, 36)
+moveInRockFrame.BackgroundColor3 = Color3.fromRGB(248, 249, 250)
+moveInRockFrame.LayoutOrder = 2
+moveInRockFrame.Parent = page1
+Instance.new("UICorner", moveInRockFrame).CornerRadius = UDim.new(0, 6)
+
+local moveInRockLabel = Instance.new("TextLabel")
+moveInRockLabel.Size = UDim2.new(0.55, -6, 1, 0)
+moveInRockLabel.Position = UDim2.new(0, 8, 0, 0)
+moveInRockLabel.BackgroundTransparency = 1
+moveInRockLabel.Text = "移動到石頭裡"
+moveInRockLabel.TextSize = 13
+moveInRockLabel.Font = Enum.Font.GothamBold
+moveInRockLabel.TextColor3 = Color3.fromRGB(60, 60, 60)
+moveInRockLabel.TextXAlignment = Enum.TextXAlignment.Left
+moveInRockLabel.Parent = moveInRockFrame
+
+local moveInRockBtn = Instance.new("TextButton")
+moveInRockBtn.Size = UDim2.new(0, 70, 0, 24)
+moveInRockBtn.Position = UDim2.new(1, -78, 0, 6)
+moveInRockBtn.BackgroundColor3 = Color3.fromRGB(173, 216, 230)
+moveInRockBtn.Text = "開啟"
+moveInRockBtn.TextSize = 12
+moveInRockBtn.Font = Enum.Font.GothamBold
+moveInRockBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+moveInRockBtn.Parent = moveInRockFrame
+Instance.new("UICorner", moveInRockBtn).CornerRadius = UDim.new(0, 5)
+
+local moveInRockConnection = nil
+
+moveInRockBtn.MouseButton1Click:Connect(function()
+    toggles.moveInRock = not toggles.moveInRock
+    
+    if toggles.moveInRock then
+        moveInRockBtn.Text = "關閉"
+        moveInRockBtn.BackgroundColor3 = Color3.fromRGB(244, 67, 54)
+        moveInRockFrame.BackgroundColor3 = Color3.fromRGB(200, 230, 201)
+        
+        pcall(function()
+            local char = player.Character
+            if char then
+                local tool = char:FindFirstChildWhichIsA("Tool")
+                if tool then
+                    tool:Destroy()
+                end
+            end
+            
+            task.wait(0.1)
+            fireclickdetector(Workspace.Lobby["Ghost"].ClickDetector)
+            task.wait(0.3)
+            ReplicatedStorage.Ghostinvisibilityactivated:FireServer()
+            task.wait(0.1)
+            fireclickdetector(Workspace.Lobby["Rocky"].ClickDetector)
+            task.wait(0.1)
+            
+            noclipCharacter(true)
+            
+            safeTeleport(10, 0, 0)
+            
+            local moveLoopConnection
+            moveLoopConnection = RunService.RenderStepped:Connect(function()
+                if not toggles.moveInRock then
+                    moveLoopConnection:Disconnect()
+                    return
+                end
+                
+                local char = player.Character
+                if char and char:FindFirstChild("HumanoidRootPart") then
+                    local hrp = char.HumanoidRootPart
+                    local targetPos = Vector3.new(0, 0, 0)
+                    local direction = (targetPos - hrp.Position).Unit
+                    hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + direction)
+                end
+            end)
+            
+            task.wait(0.2)
+            ReplicatedStorage.RockyShoot:FireServer()
+            task.wait(0.1)
+            fireclickdetector(Workspace.Lobby["Za Hando"].ClickDetector)
+            
+            task.wait(0.2)
+            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                fixedCFrame = player.Character.HumanoidRootPart.CFrame
+                fixedPosEnabled = true
+            end
+            
+            local holdLoopConnection
+            holdLoopConnection = RunService.RenderStepped:Connect(function()
+                if not toggles.moveInRock then
+                    holdLoopConnection:Disconnect()
+                    return
+                end
+                
+                if fixedPosEnabled and fixedCFrame then
+                    local char = player.Character
+                    if char and char:FindFirstChild("HumanoidRootPart") then
+                        local hrp = char.HumanoidRootPart
+                        hrp.CFrame = fixedCFrame
+                    end
+                end
+            end)
+        end)
+    else
+        moveInRockBtn.Text = "開啟"
+        moveInRockBtn.BackgroundColor3 = Color3.fromRGB(173, 216, 230)
+        moveInRockFrame.BackgroundColor3 = Color3.fromRGB(248, 249, 250)
+        
+        toggles.moveInRock = false
+        fixedPosEnabled = false
+        fixedCFrame = nil
+        noclipCharacter(false)
+        unanchorCharacter()
+    end
+end)
+
+local manualAbsorbFrame = Instance.new("Frame")
+manualAbsorbFrame.Size = UDim2.new(1, 0, 0, 36)
+manualAbsorbFrame.BackgroundColor3 = Color3.fromRGB(248, 249, 250)
+manualAbsorbFrame.LayoutOrder = 3
+manualAbsorbFrame.Parent = page1
+Instance.new("UICorner", manualAbsorbFrame).CornerRadius = UDim.new(0, 6)
+
+local manualAbsorbLabel = Instance.new("TextLabel")
+manualAbsorbLabel.Size = UDim2.new(0.55, -6, 1, 0)
+manualAbsorbLabel.Position = UDim2.new(0, 8, 0, 0)
+manualAbsorbLabel.BackgroundTransparency = 1
+manualAbsorbLabel.Text = "手動吸人"
+manualAbsorbLabel.TextSize = 13
+manualAbsorbLabel.Font = Enum.Font.GothamBold
+manualAbsorbLabel.TextColor3 = Color3.fromRGB(60, 60, 60)
+manualAbsorbLabel.TextXAlignment = Enum.TextXAlignment.Left
+manualAbsorbLabel.Parent = manualAbsorbFrame
+
+local manualAbsorbBtn = Instance.new("TextButton")
+manualAbsorbBtn.Size = UDim2.new(0, 70, 0, 24)
+manualAbsorbBtn.Position = UDim2.new(1, -78, 0, 6)
+manualAbsorbBtn.BackgroundColor3 = Color3.fromRGB(173, 216, 230)
+manualAbsorbBtn.Text = "發動"
+manualAbsorbBtn.TextSize = 12
+manualAbsorbBtn.Font = Enum.Font.GothamBold
+manualAbsorbBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+manualAbsorbBtn.Parent = manualAbsorbFrame
+Instance.new("UICorner", manualAbsorbBtn).CornerRadius = UDim.new(0, 5)
+
+local cooldownConnection = nil
+
+local function updateManualAbsorbButton()
+    if manualAbsorbCooldown <= 0 then
+        manualAbsorbBtn.Text = "發動"
+        manualAbsorbBtn.BackgroundColor3 = Color3.fromRGB(173, 216, 230)
+    else
+        manualAbsorbBtn.Text = "冷卻" .. math.ceil(manualAbsorbCooldown)
+        manualAbsorbBtn.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+    end
+end
+
+manualAbsorbBtn.MouseButton1Click:Connect(function()
+    if manualAbsorbCooldown <= 0 then
+        pcall(function()
+            fireclickdetector(Workspace.Lobby["Za Hando"].ClickDetector)
+            task.wait(0.3)
+            ReplicatedStorage.Erase:FireServer()
+            
+            manualAbsorbCooldown = manualAbsorbMaxCooldown
+            updateManualAbsorbButton()
+            
+            if cooldownConnection then
+                cooldownConnection:Disconnect()
+            end
+            
+            cooldownConnection = RunService.Heartbeat:Connect(function(deltaTime)
+                manualAbsorbCooldown = manualAbsorbCooldown - deltaTime
+                if manualAbsorbCooldown <= 0 then
+                    manualAbsorbCooldown = 0
+                    cooldownConnection:Disconnect()
+                end
+                updateManualAbsorbButton()
+            end)
+        end)
+    end
+end)
+
+-- ============================================================
+-- 六角分區
+-- ============================================================
+
+local hexaScriptFrame, hexaScriptBtn = createRow(page2, "另外腳本", "執行", 1)
+hexaScriptBtn.MouseButton1Click:Connect(function()
+    pcall(function()
+        loadstring(game:HttpGet("https://gist.githubusercontent.com/0-BaconScripter-0/7f1961f745ec16a72941a78087d968f2/raw/2005d288fa4a009ae55cc1fbf682b1a7d254b3e0/SB%2520Auto%2520Get%2520Hexa"))()
+        hexaScriptBtn.Text = "已執行"
+        hexaScriptBtn.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+        task.wait(1.5)
+        hexaScriptBtn.Text = "執行"
+        hexaScriptBtn.BackgroundColor3 = Color3.fromRGB(173, 216, 230)
+    end)
+end)
+
+-- ============================================================
+-- 說明分區
+-- ============================================================
+
+local EXPLAIN_TEXT = [[要解跑酷的點變成石頭後
+要幫的點移動到石頭裡
+然後是以自己判斷對其他人用手動吸人
+
+要解六角的用附的腳本]]
+
+local textRow = Instance.new("Frame")
+textRow.Size = UDim2.new(1, 0, 0, 10)
+textRow.BackgroundColor3 = Color3.fromRGB(248, 249, 250)
+textRow.LayoutOrder = 1
+textRow.AutomaticSize = Enum.AutomaticSize.None
+textRow.Parent = page3
+Instance.new("UICorner", textRow).CornerRadius = UDim.new(0, 6)
+
+local explainLabel = Instance.new("TextLabel")
+explainLabel.Size = UDim2.new(1, -12, 0, 10)
+explainLabel.Position = UDim2.new(0, 6, 0, 6)
+explainLabel.BackgroundTransparency = 1
+explainLabel.Text = EXPLAIN_TEXT
+explainLabel.TextSize = 12
+explainLabel.Font = Enum.Font.Gotham
+explainLabel.TextColor3 = Color3.fromRGB(60, 60, 60)
+explainLabel.TextXAlignment = Enum.TextXAlignment.Left
+explainLabel.TextYAlignment = Enum.TextYAlignment.Top
+explainLabel.TextWrapped = true
+explainLabel.Parent = textRow
+
+local function refreshExplainHeight()
+    task.defer(function()
+        local textService = game:GetService("TextService")
+        local bounds = textService:GetTextSize(
+            explainLabel.Text,
+            explainLabel.TextSize,
+            explainLabel.Font,
+            Vector2.new(explainLabel.AbsoluteSize.X > 10 and explainLabel.AbsoluteSize.X or 240, math.huge)
+        )
+        local newH = bounds.Y + 14
+        explainLabel.Size = UDim2.new(1, -12, 0, bounds.Y)
+        textRow.Size = UDim2.new(1, 0, 0, newH)
+    end)
+end
+
+task.delay(0.1, refreshExplainHeight)
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(0.9, 0, 0, 24)
+statusLabel.Position = UDim2.new(0.05, 0, 1, -30)
+statusLabel.BackgroundColor3 = Color3.fromRGB(200, 230, 201)
+statusLabel.Text = "系統就緒"
+statusLabel.TextSize = 11
+statusLabel.Font = Enum.Font.GothamBold
+statusLabel.TextColor3 = Color3.fromRGB(46, 125, 50)
+statusLabel.Parent = mainFrame
+Instance.new("UICorner", statusLabel).CornerRadius = UDim.new(0, 5)
+
+local function enableDrag(frame, dragHandle)
+    local dragging = false
+    local dragInput, dragStart, startPos
+
+    local function update(input)
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(
+            startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y
+        )
+    end
+
+    dragHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or
+           input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    dragHandle.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or
+           input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            update(input)
+        end
+    end)
+end
+
+enableDrag(mainFrame, titleBar)
+
+local miniFrame = Instance.new("Frame")
+miniFrame.Size = UDim2.new(0, 180, 0, 32)
+miniFrame.Position = UDim2.new(0, 20, 0, 30)
+miniFrame.BackgroundColor3 = Color3.fromRGB(173, 216, 230)
+miniFrame.Visible = false
+miniFrame.Parent = screenGui
+Instance.new("UICorner", miniFrame).CornerRadius = UDim.new(0, 6)
+
+local miniTitle = Instance.new("TextLabel")
+miniTitle.Text = "貓玲的跑酷+六角腳本"
+miniTitle.Size = UDim2.new(1, -36, 1, 0)
+miniTitle.BackgroundTransparency = 1
+miniTitle.Font = Enum.Font.GothamBold
+miniTitle.TextSize = 13
+miniTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+miniTitle.Parent = miniFrame
+
+local expandButton = Instance.new("TextButton")
+expandButton.Text = "+"
+expandButton.Size = UDim2.new(0, 24, 0, 24)
+expandButton.Position = UDim2.new(1, -28, 0, 4)
+expandButton.BackgroundColor3 = Color3.fromRGB(135, 206, 250)
+expandButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+expandButton.TextSize = 12
+expandButton.Font = Enum.Font.GothamBold
+expandButton.Parent = miniFrame
+Instance.new("UICorner", expandButton).CornerRadius = UDim.new(0, 5)
+
+enableDrag(miniFrame, miniFrame)
+
+minimizeButton.MouseButton1Click:Connect(function()
+    mainFrame.Visible = false
+    miniFrame.Visible = true
+end)
+
+expandButton.MouseButton1Click:Connect(function()
+    miniFrame.Visible = false
+    mainFrame.Visible = true
+end)
+
+closeButton.MouseButton1Click:Connect(function()
+    toggles.moveInRock = false
+    fixedPosEnabled = false
+    fixedCFrame = nil
+    noclipCharacter(false)
+    if cooldownConnection then
+        cooldownConnection:Disconnect()
+    end
+    screenGui:Destroy()
+end)
+
+print("貓玲的跑酷+六角腳本 v0.1 已載入!")
