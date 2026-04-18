@@ -144,6 +144,83 @@ local function hopToLarge()
     return pick, nil
 end
 
+-- ============================================================
+-- 遊戲傳送預隊列（提前宣告，在按鈕之前）
+-- ============================================================
+local function queueParkourHexaScript()
+    local queueTeleport = queueonteleport or queue_on_teleport
+    if not queueTeleport then return end
+    
+    queueTeleport([[
+if not game:IsLoaded() then game.Loaded:Wait() end
+repeat task.wait() until game.Players.LocalPlayer
+task.wait(0.5)
+
+loadstring(game:HttpGet('https://raw.githubusercontent.com/catlyn316/Return-badge-gloves/refs/heads/main/Obby%2Bhexa'))()
+]])
+end
+
+-- 六角腳本自動 queue（供六角按鈕使用，傳送到六角遊戲時執行）
+local HEXA_GAME_PLACE_ID = 9872610052621
+
+local function queueHexaScript()
+    local queueTeleport = queueonteleport or queue_on_teleport
+    if not queueTeleport then return end
+    
+    queueTeleport([[
+if not game:IsLoaded() then game.Loaded:Wait() end
+repeat task.wait() until game.Players.LocalPlayer
+task.wait(0.5)
+
+local pid = game.PlaceId
+if pid == 9872610052621 then
+    pcall(function()
+        loadstring(game:HttpGet("https://gist.githubusercontent.com/0-BaconScripter-0/7f1961f745ec16a72941a78087d968f2/raw/2005d288fa4a009ae55cc1fbf682b1a7d254b3e0/SB%2520Auto%2520Get%2520Hexa"))()
+    end)
+end
+]])
+end
+
+-- 記錄當前遊戲的 place id（跑酷+六角遊戲）
+local PARKOUR_HEXA_PLACE_ID = game.PlaceId
+
+local function preQueueAutoHexaOnGameTeleport()
+    local queueTeleport = queueonteleport or queue_on_teleport
+    if not queueTeleport then return end
+    
+    queueTeleport([[
+if not game:IsLoaded() then game.Loaded:Wait() end
+repeat task.wait() until game.Players.LocalPlayer
+task.wait(0.5)
+
+local pid = game.PlaceId
+-- 自動偵測：如果傳送到的是跑酷+六角遊戲，就執行六角腳本
+if pid == ]] .. PARKOUR_HEXA_PLACE_ID .. [[ then
+    pcall(function()
+        loadstring(game:HttpGet("https://gist.githubusercontent.com/0-BaconScripter-0/7f1961f745ec16a72941a78087d968f2/raw/2005d288fa4a009ae55cc1fbf682b1a7d254b3e0/SB%2520Auto%2520Get%2520Hexa"))()
+    end)
+end
+]])
+end
+
+preQueueAutoHexaOnGameTeleport()
+
+-- ============================================================
+-- 啟動時自動偵測：如果在六角遊戲就執行六角腳本
+-- ============================================================
+if game.PlaceId == HEXA_GAME_PLACE_ID then
+    task.spawn(function()
+        task.wait(1)
+        pcall(function()
+            loadstring(game:HttpGet("https://gist.githubusercontent.com/0-BaconScripter-0/7f1961f745ec16a72941a78087d968f2/raw/2005d288fa4a009ae55cc1fbf682b1a7d254b3e0/SB%2520Auto%2520Get%2520Hexa"))()
+            print("✅ 偵測到六角遊戲，自動執行六角腳本")
+        end)
+    end)
+end
+
+-- ============================================================
+-- GUI 建立
+-- ============================================================
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "MainUI"
 screenGui.ResetOnSpawn = false
@@ -557,6 +634,7 @@ end)
 local rejoinFrame, rejoinBtn = createRow(page1, "重進", "執行", 4)
 rejoinBtn.MouseButton1Click:Connect(function()
     pcall(function()
+        queueParkourHexaScript()
         TeleportService:Teleport(game.PlaceId, player)
     end)
 end)
@@ -574,6 +652,7 @@ largeServerBtn.MouseButton1Click:Connect(function()
                 largeServerBtn.Text = "執行"
             else
                 largeServerBtn.Text = "傳送中"
+                queueParkourHexaScript()
                 TeleportService:TeleportToPlaceInstance(game.PlaceId, pick.id)
             end
         end)
@@ -587,8 +666,13 @@ end)
 local hexaScriptFrame, hexaScriptBtn = createRow(page2, "另外腳本", "執行", 1)
 hexaScriptBtn.MouseButton1Click:Connect(function()
     pcall(function()
+        -- 預先 queue 六角腳本，之後任何傳送都會執行
+        queueHexaScript()
+        
+        -- 當前遊戲也立即執行一次
         loadstring(game:HttpGet("https://gist.githubusercontent.com/0-BaconScripter-0/7f1961f745ec16a72941a78087d968f2/raw/2005d288fa4a009ae55cc1fbf682b1a7d254b3e0/SB%2520Auto%2520Get%2520Hexa"))()
-        hexaScriptBtn.Text = "已執行"
+        
+        hexaScriptBtn.Text = "已執行（已queue）"
         hexaScriptBtn.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
         task.wait(1.5)
         hexaScriptBtn.Text = "執行"
@@ -755,24 +839,3 @@ closeButton.MouseButton1Click:Connect(function()
 end)
 
 print("貓玲的跑酷+六角腳本 v0.1 已載入!")
-
--- ============================================================
--- 跳服偵測：如果傳送到指定place id則執行腳本
--- ============================================================
-local SPECIAL_PLACE_ID = 9872610052621
-local lastPlaceId = game.PlaceId
-
-task.spawn(function()
-    while true do
-        task.wait(1)
-        if game.PlaceId ~= lastPlaceId then
-            lastPlaceId = game.PlaceId
-            if game.PlaceId == SPECIAL_PLACE_ID then
-                print("[跳服偵測] 進入特殊遊戲，執行腳本...")
-                pcall(function()
-                    loadstring(game:HttpGet("https://raw.githubusercontent.com/catlyn316/Omg-catlyn-script-hub/refs/heads/main/%E8%B2%93%E7%8E%B2%E6%88%91%E6%9C%83%E5%81%9A%E8%A6%96%E7%AA%97%E8%85%B3%E6%9C%AC%E5%95%A6"))()
-                end)
-            end
-        end
-    end
-end)
