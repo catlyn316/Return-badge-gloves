@@ -1,4 +1,4 @@
--- 貓玲的套索腳本 v1.2
+-- 貓玲的套索腳本 v1.3
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -384,6 +384,8 @@ trapBtn.MouseButton1Click:Connect(function()
         setStatus("等待工具就緒...", THEME.accent)
         waitForTool(10)
 
+        task.wait(1)
+
         -- 放套索陷阱
         pcall(function()
             ReplicatedStorage.funnyhilariousbeartrap:FireServer()
@@ -462,10 +464,6 @@ beatBtn.MouseButton1Click:Connect(function()
             end)
             task.wait(0.05)
         end
-
-        -- 8. 等 0.5 秒後點擊螢幕
-        task.wait(0.5)
-        pcall(function() mouse1click() end)
 
         setStatus("斷頭連打完成！", THEME.accent)
         beatBtn.Text             = "斷頭+連打"
@@ -565,13 +563,13 @@ stroke2.Parent    = miniFrame
 
 local miniTitle = Instance.new("TextLabel")
 miniTitle.Text               = "套索腳本"
-miniTitle.Size               = UDim2.new(1, -36, 1, 0)
-miniTitle.Position           = UDim2.new(0, 8, 0, 0)
+miniTitle.Size               = UDim2.new(1, -32, 1, 0)
+miniTitle.Position           = UDim2.new(0, 0, 0, 0)
 miniTitle.BackgroundTransparency = 1
 miniTitle.Font               = Enum.Font.GothamBold
 miniTitle.TextSize           = 14
 miniTitle.TextColor3         = THEME.accent
-miniTitle.TextXAlignment     = Enum.TextXAlignment.Left
+miniTitle.TextXAlignment     = Enum.TextXAlignment.Center
 miniTitle.Parent             = miniFrame
 
 local expandBtn = Instance.new("TextButton")
@@ -600,4 +598,4 @@ closeButton.MouseButton1Click:Connect(function()
     screenGui:Destroy()
 end)
 
-print("貓玲的套索腳本 v1.2 已載入！")
+print("貓玲的套索腳本 v1.3 已載入！")
