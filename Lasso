@@ -1,4 +1,4 @@
--- 貓玲的套索腳本 v1.0
+-- 貓玲的套索腳本 v1.2
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -18,9 +18,9 @@ pcall(function()
 end)
 
 -- 狀態變數
-local targetPlayer  = nil
-local beatdownRunning = false
-local beatdownThread  = nil
+local targetPlayer = nil
+local trapBusy     = false   -- 防止放陷阱重複執行
+local beatBusy     = false   -- 防止斷頭連打重複執行
 
 -- 牛仔繩主題色（淡黃/暖棕）
 local THEME = {
@@ -71,6 +71,27 @@ local function getHRP()
     return char and char:FindFirstChild("HumanoidRootPart")
 end
 
+-- 等待工具欄出現任意 Tool（timeout 秒後放棄）
+local function waitForTool(timeout)
+    local deadline = tick() + (timeout or 10)
+    while tick() < deadline do
+        local char = player.Character
+        if char then
+            for _, obj in ipairs(char:GetChildren()) do
+                if obj:IsA("Tool") then return true end
+            end
+        end
+        local bp = player:FindFirstChildOfClass("Backpack")
+        if bp then
+            for _, obj in ipairs(bp:GetChildren()) do
+                if obj:IsA("Tool") then return true end
+            end
+        end
+        task.wait(0.05)
+    end
+    return false
+end
+
 local function teleportToLobby()
     pcall(function()
         local hrp = getHRP()
@@ -96,11 +117,11 @@ end
 -- UI 建構
 -- ============================================================
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name            = "LassoUI"
-screenGui.ResetOnSpawn    = false
-screenGui.IgnoreGuiInset  = true
-screenGui.ZIndexBehavior  = Enum.ZIndexBehavior.Global
-screenGui.DisplayOrder    = 10001
+screenGui.Name           = "LassoUI"
+screenGui.ResetOnSpawn   = false
+screenGui.IgnoreGuiInset = true
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+screenGui.DisplayOrder   = 10001
 
 local function parentUI(g)
     local ok = false
@@ -111,11 +132,11 @@ end
 parentUI(screenGui)
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Size              = UDim2.new(0, 280, 0, 300)
-mainFrame.Position          = UDim2.new(0.5, -140, 0.5, -150)
-mainFrame.BackgroundColor3  = THEME.bg
-mainFrame.BorderSizePixel   = 0
-mainFrame.Parent            = screenGui
+mainFrame.Size             = UDim2.new(0, 280, 0, 300)
+mainFrame.Position         = UDim2.new(0.5, -140, 0.5, -150)
+mainFrame.BackgroundColor3 = THEME.bg
+mainFrame.BorderSizePixel  = 0
+mainFrame.Parent           = screenGui
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
 
 local stroke = Instance.new("UIStroke")
@@ -142,13 +163,13 @@ titleLabel.TextXAlignment     = Enum.TextXAlignment.Left
 titleLabel.Parent             = titleBar
 
 local minimizeButton = Instance.new("TextButton")
-minimizeButton.Size              = UDim2.new(0, 24, 0, 24)
-minimizeButton.Position          = UDim2.new(1, -54, 0, 4)
-minimizeButton.BackgroundColor3  = THEME.tabActive
-minimizeButton.Text              = "─"
-minimizeButton.TextColor3        = THEME.textMain
-minimizeButton.Font              = Enum.Font.GothamBold
-minimizeButton.Parent            = titleBar
+minimizeButton.Size             = UDim2.new(0, 24, 0, 24)
+minimizeButton.Position         = UDim2.new(1, -54, 0, 4)
+minimizeButton.BackgroundColor3 = THEME.tabActive
+minimizeButton.Text             = "─"
+minimizeButton.TextColor3       = THEME.textMain
+minimizeButton.Font             = Enum.Font.GothamBold
+minimizeButton.Parent           = titleBar
 Instance.new("UICorner", minimizeButton).CornerRadius = UDim.new(0, 5)
 
 local closeButton = Instance.new("TextButton")
@@ -197,21 +218,19 @@ contentContainer.Parent             = mainFrame
 
 local function makePage(parent)
     local pg = Instance.new("ScrollingFrame")
-    pg.Size                  = UDim2.new(1, 0, 1, 0)
+    pg.Size                   = UDim2.new(1, 0, 1, 0)
     pg.BackgroundTransparency = 1
-    pg.BorderSizePixel       = 0
-    pg.ScrollBarThickness    = 4
-    pg.ScrollBarImageColor3  = THEME.primary
-    pg.AutomaticCanvasSize   = Enum.AutomaticSize.Y
-    pg.Visible               = false
-    pg.Parent                = parent
-
+    pg.BorderSizePixel        = 0
+    pg.ScrollBarThickness     = 4
+    pg.ScrollBarImageColor3   = THEME.primary
+    pg.AutomaticCanvasSize    = Enum.AutomaticSize.Y
+    pg.Visible                = false
+    pg.Parent                 = parent
     local lay = Instance.new("UIListLayout")
-    lay.Padding            = UDim.new(0, 6)
-    lay.SortOrder          = Enum.SortOrder.LayoutOrder
+    lay.Padding             = UDim.new(0, 6)
+    lay.SortOrder           = Enum.SortOrder.LayoutOrder
     lay.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    lay.Parent             = pg
-
+    lay.Parent              = pg
     local pad = Instance.new("UIPadding")
     pad.PaddingRight = UDim.new(0, 6)
     pad.Parent       = pg
@@ -273,7 +292,7 @@ targetInput.TextColor3       = THEME.textMain
 targetInput.Parent           = inputFrame
 Instance.new("UICorner", targetInput).CornerRadius = UDim.new(0, 5)
 
--- 通用按鈕行建構
+-- 通用按鈕行
 local function makeButtonRow(parent, text, color, order)
     local frame = Instance.new("Frame")
     frame.Size             = UDim2.new(1, 0, 0, 32)
@@ -281,7 +300,6 @@ local function makeButtonRow(parent, text, color, order)
     frame.LayoutOrder      = order
     frame.Parent           = parent
     Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
-
     local btn = Instance.new("TextButton")
     btn.Size             = UDim2.new(1, -12, 0, 22)
     btn.Position         = UDim2.new(0, 6, 0, 5)
@@ -295,23 +313,9 @@ local function makeButtonRow(parent, text, color, order)
     return frame, btn
 end
 
-local trapFrame,     trapBtn     = makeButtonRow(pg1, "放陷阱",   Color3.fromRGB(145, 105, 25), 2)
-local resetFrame,    resetBtn    = makeButtonRow(pg1, "重置",     Color3.fromRGB(165,  48,  48), 3)
-local beatdownFrame, beatdownBtn = makeButtonRow(pg1, "發動",     Color3.fromRGB( 75, 138,  48), 4)
-
--- 固定 斷頭+連打 列的標題
-do
-    local rowLabel = Instance.new("TextLabel")
-    rowLabel.Size               = UDim2.new(0, 90, 0, 14)
-    rowLabel.Position           = UDim2.new(0, 6, 0, -14)
-    rowLabel.BackgroundTransparency = 1
-    rowLabel.Text               = "斷頭+連打"
-    rowLabel.TextSize           = 10
-    rowLabel.Font               = Enum.Font.Gotham
-    rowLabel.TextColor3         = THEME.textMuted
-    rowLabel.TextXAlignment     = Enum.TextXAlignment.Left
-    rowLabel.Parent             = beatdownFrame
-end
+local trapFrame, trapBtn = makeButtonRow(pg1, "放陷阱",    Color3.fromRGB(145, 105, 25), 2)
+local _,         resetBtn = makeButtonRow(pg1, "重置",      Color3.fromRGB(165,  48,  48), 3)
+local _,         beatBtn  = makeButtonRow(pg1, "斷頭+連打", Color3.fromRGB( 75, 138,  48), 4)
 
 -- 狀態欄
 local statusLabel = Instance.new("TextLabel")
@@ -344,12 +348,18 @@ end
 -- 按鈕1：放陷阱
 -- ============================================================
 trapBtn.MouseButton1Click:Connect(function()
+    if trapBusy then return end
     local tgt = resolveTarget()
     if not tgt then return end
-    setStatus("放置陷阱中...", THEME.accent)
+
+    trapBusy = true
+    local origColor = trapBtn.BackgroundColor3
+    trapBtn.BackgroundColor3 = Color3.fromRGB(90, 70, 20)
+    trapBtn.Text = "執行中..."
 
     task.spawn(function()
-        -- 如果手套不是Trap，換裝
+
+        -- 如果手套不是 Trap，先換裝
         pcall(function()
             local ls = player:FindFirstChild("leaderstats")
             if ls then
@@ -362,11 +372,17 @@ trapBtn.MouseButton1Click:Connect(function()
         task.wait(0.5)
 
         -- 傳送到大廳 Teleport1
+        setStatus("傳送大廳...", THEME.textSub)
         teleportToLobby()
         task.wait(0.5)
 
         -- 傳送到目標前方 15 單位，面向目標
+        setStatus("傳送目標旁...", THEME.textSub)
         teleportInFrontOf(tgt, 15)
+
+        -- 等工具欄出現任意 Tool 再放陷阱
+        setStatus("等待工具就緒...", THEME.accent)
+        waitForTool(10)
 
         -- 放套索陷阱
         pcall(function()
@@ -374,6 +390,9 @@ trapBtn.MouseButton1Click:Connect(function()
         end)
 
         setStatus("陷阱已放置！", THEME.accent)
+        trapBtn.Text             = "放陷阱"
+        trapBtn.BackgroundColor3 = origColor
+        trapBusy = false
     end)
 end)
 
@@ -386,45 +405,33 @@ resetBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ============================================================
--- 按鈕3：斷頭+連打（開關：發動 / 停止）
+-- 按鈕3：斷頭+連打（一次性按鈕，執行中防重複）
 -- ============================================================
-beatdownBtn.MouseButton1Click:Connect(function()
-    -- 若正在執行，則停止
-    if beatdownRunning then
-        beatdownRunning = false
-        if beatdownThread then
-            task.cancel(beatdownThread)
-            beatdownThread = nil
-        end
-        beatdownBtn.Text             = "發動"
-        beatdownBtn.BackgroundColor3 = Color3.fromRGB(75, 138, 48)
-        beatdownFrame.BackgroundColor3 = THEME.bgRow
-        setStatus("已停止", THEME.textMuted)
-        return
-    end
-
+beatBtn.MouseButton1Click:Connect(function()
+    if beatBusy then return end
     local tgt = resolveTarget()
     if not tgt then return end
 
-    -- 啟動
-    beatdownRunning              = true
-    beatdownBtn.Text             = "停止"
-    beatdownBtn.BackgroundColor3 = THEME.red
-    beatdownFrame.BackgroundColor3 = Color3.fromRGB(40, 12, 12)
-    setStatus("斷頭+連打發動中！", THEME.accent)
+    beatBusy = true
+    local origColor = beatBtn.BackgroundColor3
+    beatBtn.BackgroundColor3 = Color3.fromRGB(50, 95, 30)
+    beatBtn.Text = "執行中..."
 
-    beatdownThread = task.spawn(function()
+    task.spawn(function()
 
         -- 1. 換裝：Knockoff
+        setStatus("換裝 Knockoff...", THEME.textSub)
         pcall(function()
             fireclickdetector(Workspace.Lobby["Knockoff"].ClickDetector)
         end)
 
         -- 2. 傳送到目標前方 5 單位
+        setStatus("傳送目標旁...", THEME.textSub)
         teleportInFrontOf(tgt, 5)
         task.wait(0.3)
 
         -- 3. GeneralHit → 目標頭部
+        setStatus("斷頭！", THEME.accent)
         pcall(function()
             local head = tgt.Character and tgt.Character:FindFirstChild("Head")
             if head then
@@ -433,16 +440,22 @@ beatdownBtn.MouseButton1Click:Connect(function()
         end)
 
         -- 4. 換裝：Beatdown
+        setStatus("換裝 Beatdown...", THEME.textSub)
         pcall(function()
             fireclickdetector(Workspace.Lobby["Beatdown"].ClickDetector)
         end)
 
         -- 5. 傳送回 Teleport1
+        setStatus("傳送大廳等工具...", THEME.textSub)
         teleportToLobby()
 
-        -- 6. 持續 3 秒：移動到目標前 5 單位 + GeneralAbility
+        -- 6. 等工具欄出現任意 Tool 再繼續
+        waitForTool(10)
+
+        -- 7. 持續 3 秒：傳送到目標前 5 單位 + GeneralAbility
+        setStatus("連打中！（3秒）", THEME.accent)
         local endTime = tick() + 3
-        while tick() < endTime and beatdownRunning do
+        while tick() < endTime do
             teleportInFrontOf(tgt, 5)
             pcall(function()
                 ReplicatedStorage.GeneralAbility:FireServer()
@@ -450,18 +463,14 @@ beatdownBtn.MouseButton1Click:Connect(function()
             task.wait(0.05)
         end
 
-        -- 7. 等 0.5 秒後點擊螢幕
+        -- 8. 等 0.5 秒後點擊螢幕
         task.wait(0.5)
         pcall(function() mouse1click() end)
 
-        -- 結束，重置UI
-        if beatdownRunning then
-            beatdownRunning              = false
-            beatdownBtn.Text             = "發動"
-            beatdownBtn.BackgroundColor3 = Color3.fromRGB(75, 138, 48)
-            beatdownFrame.BackgroundColor3 = THEME.bgRow
-            setStatus("斷頭連打完成！", THEME.accent)
-        end
+        setStatus("斷頭連打完成！", THEME.accent)
+        beatBtn.Text             = "斷頭+連打"
+        beatBtn.BackgroundColor3 = origColor
+        beatBusy = false
     end)
 end)
 
@@ -483,23 +492,23 @@ infoLabel.Text =
     "【使用順序】\n" ..
     "① 幫的人先按「放陷阱」\n" ..
     "② 再按「重置」\n" ..
-    "③ 最後按「發動」（斷頭+連打）\n\n" ..
+    "③ 最後按「斷頭+連打」\n\n" ..
     "【注意事項】\n" ..
     "幫的人要有 41000 拍\n\n" ..
     "陷阱（Trap 手套）\n" ..
     "幫的或要解的有都行\n\n" ..
     "【按鈕說明】\n" ..
-    "放陷阱：自動換裝→傳送→放置套索陷阱\n" ..
+    "放陷阱：換裝→傳送→等工具→放置套索陷阱\n" ..
     "重置：讓自己角色重生\n" ..
-    "發動：換裝→斷頭→連打技能（3秒）"
-infoLabel.TextSize         = 12
-infoLabel.Font             = Enum.Font.Gotham
-infoLabel.TextColor3       = THEME.textMain
-infoLabel.TextXAlignment   = Enum.TextXAlignment.Left
-infoLabel.TextYAlignment   = Enum.TextYAlignment.Top
-infoLabel.TextWrapped      = true
-infoLabel.LineHeight       = 1.35
-infoLabel.Parent           = infoTextFrame
+    "斷頭+連打：換裝→斷頭→換裝→等工具→連打（3秒）"
+infoLabel.TextSize       = 12
+infoLabel.Font           = Enum.Font.Gotham
+infoLabel.TextColor3     = THEME.textMain
+infoLabel.TextXAlignment = Enum.TextXAlignment.Left
+infoLabel.TextYAlignment = Enum.TextYAlignment.Top
+infoLabel.TextWrapped    = true
+infoLabel.LineHeight     = 1.35
+infoLabel.Parent         = infoTextFrame
 
 -- ============================================================
 -- 拖曳
@@ -555,15 +564,15 @@ stroke2.Thickness = 1.5
 stroke2.Parent    = miniFrame
 
 local miniTitle = Instance.new("TextLabel")
-miniTitle.Text             = "套索腳本"
-miniTitle.Size             = UDim2.new(1, -36, 1, 0)
-miniTitle.Position         = UDim2.new(0, 8, 0, 0)
+miniTitle.Text               = "套索腳本"
+miniTitle.Size               = UDim2.new(1, -36, 1, 0)
+miniTitle.Position           = UDim2.new(0, 8, 0, 0)
 miniTitle.BackgroundTransparency = 1
-miniTitle.Font             = Enum.Font.GothamBold
-miniTitle.TextSize         = 14
-miniTitle.TextColor3       = THEME.accent
-miniTitle.TextXAlignment   = Enum.TextXAlignment.Left
-miniTitle.Parent           = miniFrame
+miniTitle.Font               = Enum.Font.GothamBold
+miniTitle.TextSize           = 14
+miniTitle.TextColor3         = THEME.accent
+miniTitle.TextXAlignment     = Enum.TextXAlignment.Left
+miniTitle.Parent             = miniFrame
 
 local expandBtn = Instance.new("TextButton")
 expandBtn.Text             = "+"
@@ -588,9 +597,7 @@ expandBtn.MouseButton1Click:Connect(function()
 end)
 
 closeButton.MouseButton1Click:Connect(function()
-    beatdownRunning = false
-    if beatdownThread then pcall(function() task.cancel(beatdownThread) end) end
     screenGui:Destroy()
 end)
 
-print("貓玲的套索腳本 v1.0 已載入！")
+print("貓玲的套索腳本 v1.2 已載入！")
