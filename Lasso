@@ -384,7 +384,7 @@ trapBtn.MouseButton1Click:Connect(function()
         setStatus("等待工具就緒...", THEME.accent)
         waitForTool(10)
 
-        task.wait(1)
+        task.wait(0.7)
 
         -- 放套索陷阱
         pcall(function()
@@ -488,9 +488,9 @@ infoLabel.Position           = UDim2.new(0, 8, 0, 8)
 infoLabel.BackgroundTransparency = 1
 infoLabel.Text =
     "【使用順序】\n" ..
-    "① 幫的人先按「放陷阱」\n" ..
-    "② 再按「重置」\n" ..
-    "③ 最後按「斷頭+連打」\n\n" ..
+    "① 幫的人或要解的人先按「放陷阱」\n" ..
+    "② 如果是幫的人放就再按「重置」,然後讓要解的人踩陷阱\n" ..
+    "③ 最後幫的人按「斷頭+連打」\n\n" ..
     "【注意事項】\n" ..
     "幫的人要有 41000 拍\n\n" ..
     "陷阱（Trap 手套）\n" ..
@@ -498,7 +498,7 @@ infoLabel.Text =
     "【按鈕說明】\n" ..
     "放陷阱：換裝→傳送→等工具→放置套索陷阱\n" ..
     "重置：讓自己角色重生\n" ..
-    "斷頭+連打：換裝→斷頭→換裝→等工具→連打（3秒）"
+    "斷頭+連打：換裝→斷頭→換裝→等手套出現→追蹤（3秒）"
 infoLabel.TextSize       = 12
 infoLabel.Font           = Enum.Font.Gotham
 infoLabel.TextColor3     = THEME.textMain
