@@ -232,7 +232,7 @@ end
 -- ============================================================
 -- 頁面1：傳送
 -- ============================================================
-local tp1Frame, tp1Btn = createTriggerRow(page1, "傳送到四季（ClickDetector）", "傳送", 1)
+local tp1Frame, tp1Btn = createTriggerRow(page1, "傳送到四季", "傳送", 1)
 local tp2Frame, tp2Btn = createTriggerRow(page1, "直接傳送到四季", "傳送", 2)
 
 tp1Btn.MouseButton1Click:Connect(function()
@@ -260,9 +260,16 @@ lotus2Btn.MouseButton1Click:Connect(function()
     pcall(function()
         local char = player.Character
         if char and char:FindFirstChild("HumanoidRootPart") then
-            local net = Workspace:FindFirstChild("Lotus2") and Workspace.Lotus2:FindFirstChild("Net")
+            local lotus2 = Workspace:FindFirstChild("Lotus2")
+            local net = lotus2 and lotus2:FindFirstChild("Net")
+            -- Net 可能是 Model，往下找第一個 BasePart
+            if net and not net:IsA("BasePart") then
+                for _, v in ipairs(net:GetDescendants()) do
+                    if v:IsA("BasePart") then net = v break end
+                end
+            end
             if net and net:IsA("BasePart") then
-                char.HumanoidRootPart.CFrame = net.CFrame + Vector3.new(0, 3, 0)
+                char.HumanoidRootPart.CFrame = CFrame.new(net.Position + Vector3.new(0, 3, 0))
             end
         end
         task.wait(0.3)
@@ -278,9 +285,16 @@ lotus3Btn.MouseButton1Click:Connect(function()
     pcall(function()
         local char = player.Character
         if char and char:FindFirstChild("HumanoidRootPart") then
-            local target = Workspace:FindFirstChild("Lotus3_Blue") and Workspace.Lotus3_Blue:FindFirstChild("Lotus")
+            local lotus3Root = Workspace:FindFirstChild("Lotus3_Blue")
+            local target = lotus3Root and lotus3Root:FindFirstChild("Lotus")
+            -- Lotus 可能是 Model，往下找第一個 BasePart
+            if target and not target:IsA("BasePart") then
+                for _, v in ipairs(target:GetDescendants()) do
+                    if v:IsA("BasePart") then target = v break end
+                end
+            end
             if target and target:IsA("BasePart") then
-                char.HumanoidRootPart.CFrame = target.CFrame + Vector3.new(0, 3, 0)
+                char.HumanoidRootPart.CFrame = CFrame.new(target.Position + Vector3.new(0, 3, 0))
                 flashBtn(lotus3Btn, "✓")
             else
                 flashBtn(lotus3Btn, "×", 1)
@@ -343,7 +357,7 @@ fontInput.Parent = fontRow
 Instance.new("UICorner", fontInput).CornerRadius = UDim.new(0, 5)
 
 local textRow = Instance.new("Frame")
-textRow.Size = UDim2.new(1, 0, 0, 320)
+textRow.Size = UDim2.new(1, 0, 0, 999)
 textRow.BackgroundColor3 = THEME.bgRow
 textRow.LayoutOrder = 2
 textRow.Parent = page3
@@ -356,7 +370,7 @@ explainLabel.BackgroundTransparency = 1
 explainLabel.Text =
     "【蓮花腳本說明】\n\n" ..
     "【傳送分區】\n" ..
-    "傳送到四季（ClickDetector）：\n" ..
+    "傳送到四季：\n" ..
     "  點擊傳送觸發器前往四季\n" ..
     "直接傳送到四季：\n" ..
     "  使用 TeleportService 直接傳送\n\n" ..
