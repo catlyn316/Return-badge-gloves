@@ -356,7 +356,7 @@ explainLabel.Position = UDim2.new(0, 8, 0, 8)
 explainLabel.BackgroundTransparency = 1
 explainLabel.Text =
     "🪢 被打後傳送 🪢\n\n" ..
-    "被打後給你傳送到天空上，\n就這麼簡單。"
+    "被打後給你傳送到天空上，\n就這麼簡單。\n有時可能要多試幾次。"
 explainLabel.TextSize = 12
 explainLabel.Font = Enum.Font.Gotham
 explainLabel.TextColor3 = THEME.textMain
