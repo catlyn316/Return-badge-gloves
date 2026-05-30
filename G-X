@@ -46,7 +46,8 @@ local toggles = {
 }
 
 local connections = {
-    gloveGrab = nil,
+    gloveGrab    = nil,
+    walkForward  = nil,
 }
 
 -- ============================================================
@@ -260,9 +261,9 @@ stepTitle.Parent = stepFrame
 
 local stepLabels = {}
 local stepTexts = {
-    "[ 1 ]  傳送至 Portal1",
-    "[ 2 ]  等待並觸發 Portal2",
-    "[ 3 ]  等待並觸發 Portal3",
+    "[ 1 ]  Portal1 → 等按鈕 → 觸發",
+    "[ 2 ]  Portal2 → 等按鈕 → 觸發",
+    "[ 3 ]  Portal3 → 等按鈕 → 觸發",
     "[ 4 ]  等待並進入 EndPortal",
 }
 for i, txt in ipairs(stepTexts) do
@@ -456,100 +457,90 @@ local function runGloveGrabLoop()
     hrp  = char and char:FindFirstChild("HumanoidRootPart")
     if not hrp then setStatus("角色不存在", THEME.red) toggles.gloveGrab = false return end
 
-    teleportTo(hrp, portal1)
-    task.wait(0.4)
+    -- 傳送 Portal1 → 等按鈕（0.5秒沒出現就重傳）→ 觸發
+    local cd1 = nil
+    repeat
+        if not toggles.gloveGrab then return end
+        char = player.Character
+        hrp  = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then setStatus("角色不存在", THEME.red) toggles.gloveGrab = false return end
+        teleportTo(hrp, portal1)
+        setStatus("等待 Challenge1 按鈕...", THEME.accent)
+        task.wait(0.5)
+        local btn1 = nil
+        pcall(function() btn1 = Workspace.Map.Challenge1.RedButton.Button end)
+        if btn1 then cd1 = btn1:FindFirstChildOfClass("ClickDetector") end
+        if not cd1 then setStatus("未偵測到按鈕，重新傳送...", THEME.accent) end
+    until cd1 or not toggles.gloveGrab
+    if not toggles.gloveGrab then return end
+    setStatus("觸發 Challenge1 按鈕...", THEME.accent)
+    fireCD(cd1)
 
-    -- 持續觸發 Challenge1.RedButton.Button.ClickDetector 直到 Portal2 出現
-    setStatus("觸發 Challenge1 RedButton...", THEME.accent)
-    local portal2Found = false
-    local cdLoop1 = task.spawn(function()
-        while toggles.gloveGrab and not portal2Found do
-            local cd = nil
-            pcall(function()
-                cd = Workspace.Map.Challenge1.RedButton.Button:FindFirstChildOfClass("ClickDetector")
-            end)
-            if cd then fireCD(cd) end
-            task.wait(0.25)
-        end
-    end)
-
-    -- ── 步驟 2：等待 Portal2 出現並觸發 ────────────────────
+    -- ── 步驟 2：等待 Portal2 出現並傳送 ────────────────────
     setStep(2)
     setStatus("等待 Portal2 出現...", THEME.accent)
 
     local portal2 = waitForPath({"Map", "Lobby", "Portal2"}, 60)
-    portal2Found = true
-    task.cancel(cdLoop1)
-
     if not portal2 then
         setStatus("找不到 Portal2，已中止", THEME.red)
         toggles.gloveGrab = false
         return
     end
 
-    char = player.Character
-    hrp  = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp then setStatus("角色不存在", THEME.red) toggles.gloveGrab = false return end
+    -- 傳送 Portal2 → 等按鈕（0.5秒沒出現就重傳）→ 觸發
+    local cd2 = nil
+    repeat
+        if not toggles.gloveGrab then return end
+        char = player.Character
+        hrp  = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then setStatus("角色不存在", THEME.red) toggles.gloveGrab = false return end
+        teleportTo(hrp, portal2)
+        setStatus("等待 Challenge2 按鈕...", THEME.accent)
+        task.wait(0.5)
+        local btn2 = nil
+        pcall(function() btn2 = Workspace.Map.Challenge2.RedButton.Button end)
+        if btn2 then cd2 = btn2:FindFirstChildOfClass("ClickDetector") end
+        if not cd2 then setStatus("未偵測到按鈕，重新傳送...", THEME.accent) end
+    until cd2 or not toggles.gloveGrab
+    if not toggles.gloveGrab then return end
+    setStatus("觸發 Challenge2 按鈕...", THEME.accent)
+    fireCD(cd2)
 
-    teleportTo(hrp, portal2)
-    task.wait(0.4)
-
-    -- 持續觸發 Challenge2.RedButton.Button.ClickDetector 直到 Portal3 出現
-    setStatus("觸發 Challenge2 RedButton...", THEME.accent)
-    local portal3Found = false
-    local cdLoop2 = task.spawn(function()
-        while toggles.gloveGrab and not portal3Found do
-            local cd = nil
-            pcall(function()
-                cd = Workspace.Map.Challenge2.RedButton.Button:FindFirstChildOfClass("ClickDetector")
-            end)
-            if cd then fireCD(cd) end
-            task.wait(0.25)
-        end
-    end)
-
-    -- ── 步驟 3：等待 Portal3 出現並觸發 ────────────────────
+    -- ── 步驟 3：等待 Portal3 出現並傳送 ────────────────────
     setStep(3)
     setStatus("等待 Portal3 出現...", THEME.accent)
 
     local portal3 = waitForPath({"Map", "Lobby", "Portal3"}, 60)
-    portal3Found = true
-    task.cancel(cdLoop2)
-
     if not portal3 then
         setStatus("找不到 Portal3，已中止", THEME.red)
         toggles.gloveGrab = false
         return
     end
 
-    char = player.Character
-    hrp  = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp then setStatus("角色不存在", THEME.red) toggles.gloveGrab = false return end
-
-    teleportTo(hrp, portal3)
-    task.wait(0.4)
-
-    -- 持續觸發 Challenge3.RedButton.Button.ClickDetector 直到 EndPortal 出現
-    setStatus("觸發 Challenge3 RedButton...", THEME.accent)
-    local endPortalFound = false
-    local cdLoop3 = task.spawn(function()
-        while toggles.gloveGrab and not endPortalFound do
-            local cd = nil
-            pcall(function()
-                cd = Workspace.Map.Challenge3.RedButton.Button:FindFirstChildOfClass("ClickDetector")
-            end)
-            if cd then fireCD(cd) end
-            task.wait(0.25)
-        end
-    end)
+    -- 傳送 Portal3 → 等按鈕（0.5秒沒出現就重傳）→ 觸發
+    local cd3 = nil
+    repeat
+        if not toggles.gloveGrab then return end
+        char = player.Character
+        hrp  = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then setStatus("角色不存在", THEME.red) toggles.gloveGrab = false return end
+        teleportTo(hrp, portal3)
+        setStatus("等待 Challenge3 按鈕...", THEME.accent)
+        task.wait(0.5)
+        local btn3 = nil
+        pcall(function() btn3 = Workspace.Map.Challenge3.RedButton.Button end)
+        if btn3 then cd3 = btn3:FindFirstChildOfClass("ClickDetector") end
+        if not cd3 then setStatus("未偵測到按鈕，重新傳送...", THEME.accent) end
+    until cd3 or not toggles.gloveGrab
+    if not toggles.gloveGrab then return end
+    setStatus("觸發 Challenge3 按鈕...", THEME.accent)
+    fireCD(cd3)
 
     -- ── 步驟 4：等待 EndPortal 出現並傳送 ──────────────────
     setStep(4)
     setStatus("等待 EndPortal 出現...", THEME.accent)
 
     local endPortal = waitForPath({"Map", "Lobby", "EndPortal"}, 60)
-    endPortalFound = true
-    task.cancel(cdLoop3)
 
     if not endPortal then
         setStatus("找不到 EndPortal，已中止", THEME.red)
@@ -593,6 +584,14 @@ gloveButton.MouseButton1Click:Connect(function()
             task.cancel(connections.gloveGrab)
             connections.gloveGrab = nil
         end
+        if connections.walkForward then
+            task.cancel(connections.walkForward)
+            connections.walkForward = nil
+        end
+        -- 停止移動（放開 W）
+        pcall(function()
+            if keyrelease then keyrelease(0x57) end
+        end)
         gloveButton.Text = "觸發"
         gloveButton.BackgroundColor3 = THEME.primary
         gloveFrame.BackgroundColor3 = THEME.bgRow
@@ -611,8 +610,41 @@ gloveButton.MouseButton1Click:Connect(function()
         resetSteps()
         setStatus("▶ 獲取流程啟動中...", THEME.accent)
 
+        -- 往前走迴圈（模擬按住 W 鍵）
+        connections.walkForward = task.spawn(function()
+            local ContextActionService = game:GetService("ContextActionService")
+            -- 綁定一個永遠回傳 Sink 的假動作蓋掉前進輸入
+            -- 改用 keypress / keyrelease（執行器API）
+            local function pressW()
+                pcall(function()
+                    if keypress then
+                        keypress(0x57) -- W 鍵的虛擬鍵碼
+                    end
+                end)
+            end
+            local function releaseW()
+                pcall(function()
+                    if keyrelease then
+                        keyrelease(0x57)
+                    end
+                end)
+            end
+
+            -- 先按下 W
+            pressW()
+            while toggles.gloveGrab do
+                -- 每隔一段時間重新按一次，防止有些執行器只觸發一次
+                pressW()
+                task.wait(0.1)
+            end
+            -- 離開時放開 W
+            releaseW()
+        end)
+
         connections.gloveGrab = task.spawn(function()
             runGloveGrabLoop()
+            -- 流程結束後停止走路
+            toggles.gloveGrab = false
         end)
     end
 end)
