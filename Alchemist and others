@@ -422,6 +422,7 @@ createAlchemyRow(page3,"輕盈藥",13,{"Hazel Lily","Mushroom"})
 createAlchemyRow(page3,"玩家速度藥",14,{"Mushroom","Mushroom","Blue Crystal","Hazel Lily","Plane Flower"})
 createAlchemyRow(page3,"秒殺藥",15,{"Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root","Blood Rose","Dark Root"})
 createAlchemyRow(page3,"緩慢藥",16,{"Blue Crystal","Mushroom","Blue Crystal","Jade Stone","Plane Flower","Mushroom"})
+createAlchemyRow(page3,"蠢蛋藥",16,{"Cake Mix"})
 
 -- ══════════════════════════════════════════
 -- 頁面4：傳送用藥水
@@ -456,6 +457,7 @@ local allPotionsList = {
     {"Wild Vine","Wild Vine","Wild Vine","Jade Stone","Blood Rose","Dark Root","Elder Wood"},
     {"Plane Flower","Plane Flower","Hazel Lily"},
     {"Red Crystal","Blue Crystal","Elder Wood","Elder Wood","Elder Wood"},
+    {"Cake Mix"},
 }
 
 local waterGloveFrame=Instance.new("Frame"); waterGloveFrame.Size=UDim2.new(1,0,0,32); waterGloveFrame.BackgroundColor3=Color3.fromRGB(248,249,250); waterGloveFrame.LayoutOrder=5; waterGloveFrame.Parent=page4; Instance.new("UICorner",waterGloveFrame).CornerRadius=UDim.new(0,6)
