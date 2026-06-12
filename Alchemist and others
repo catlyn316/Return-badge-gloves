@@ -279,7 +279,7 @@ local tab3=createTab("鍊金藥水",3,4)
 local tab4=createTab("傳送藥水",4,4)
 
 local contentContainer = Instance.new("Frame")
-contentContainer.Size=UDim2.new(0.92,0,0,250); contentContainer.Position=UDim2.new(0.04,0,0,72)
+contentContainer.Size=UDim2.new(0.92,0,0,190); contentContainer.Position=UDim2.new(0.04,0,0,72)
 contentContainer.BackgroundTransparency=1; contentContainer.Parent=mainFrame; contentContainer.ClipsDescendants=true
 
 local function createScrollingPage(parent)
