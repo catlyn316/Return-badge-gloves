@@ -288,7 +288,7 @@ local closeButton = Instance.new("TextButton")
 closeButton.Size = UDim2.new(0, 24, 0, 24)
 closeButton.Position = UDim2.new(1, -28, 0, 4)
 closeButton.BackgroundColor3 = THEME.red
-closeButton.Text = "✕"
+closeButton.Text = "x"
 closeButton.TextSize = 12
 closeButton.Font = Enum.Font.GothamBold
 closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -653,12 +653,12 @@ miniStroke.Color = THEME.primaryDark miniStroke.Thickness = 1.5 miniStroke.Paren
 local miniTitle = Instance.new("TextLabel")
 miniTitle.Text = "🚪 門衛腳本"
 miniTitle.Size = UDim2.new(1, -36, 1, 0)
-miniTitle.Position = UDim2.new(0, 8, 0, 0)
+miniTitle.Position = UDim2.new(0, 0, 0, 0)
 miniTitle.BackgroundTransparency = 1
 miniTitle.Font = Enum.Font.GothamBold
 miniTitle.TextSize = 13
 miniTitle.TextColor3 = THEME.accent
-miniTitle.TextXAlignment = Enum.TextXAlignment.Left
+miniTitle.TextXAlignment = Enum.TextXAlignment.Center
 miniTitle.Parent = miniFrame
 
 local expandButton = Instance.new("TextButton")
