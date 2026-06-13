@@ -1,0 +1,671 @@
+-- 貓玲的門衛腳本 v1.1
+-- ============================================================
+-- 目標遊戲 PlaceId：125845699717230
+-- 若不在目標遊戲，只顯示傳送按鈕
+-- 傳送後以 queueonteleport 自動重執行腳本並自啟動獲取
+-- ============================================================
+
+local TARGET_PLACE_ID = 125845699717230
+
+-- ============================================================
+-- 服務
+-- ============================================================
+local CoreGui         = game:GetService("CoreGui")
+local Players         = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local UserInputService = game:GetService("UserInputService")
+local player          = Players.LocalPlayer
+local playerGui       = player:WaitForChild("PlayerGui")
+local Workspace       = game:GetService("Workspace")
+
+-- 清理舊 GUI
+local function cleanOldUI(name)
+    pcall(function() if CoreGui:FindFirstChild(name)   then CoreGui[name]:Destroy()   end end)
+    pcall(function() if playerGui:FindFirstChild(name) then playerGui[name]:Destroy() end end)
+    pcall(function()
+        if type(gethui) == "function" then
+            local h = gethui()
+            if h and h:FindFirstChild(name) then h[name]:Destroy() end
+        end
+    end)
+end
+cleanOldUI("DoormanUI")
+cleanOldUI("DoormanTeleportUI")
+
+-- ============================================================
+-- 太空主題色
+-- ============================================================
+local THEME = {
+    primary     = Color3.fromRGB(130,  80, 220),   -- 星雲紫
+    primaryDark = Color3.fromRGB( 70,  30, 140),
+    accent      = Color3.fromRGB(200, 170, 255),   -- 淡紫白
+    accentGlow  = Color3.fromRGB(255, 210, 120),   -- 星光金
+    bg          = Color3.fromRGB(  6,   6,  18),   -- 深宇宙黑
+    bgRow       = Color3.fromRGB( 16,  14,  38),
+    bgInput     = Color3.fromRGB( 22,  18,  52),
+    titleBg     = Color3.fromRGB(  8,   6,  22),
+    tabBg       = Color3.fromRGB( 18,  14,  42),
+    tabActive   = Color3.fromRGB( 60,  30, 120),
+    textMain    = Color3.fromRGB(220, 210, 255),
+    textSub     = Color3.fromRGB(160, 140, 220),
+    textMuted   = Color3.fromRGB( 90,  75, 145),
+    red         = Color3.fromRGB(200,  40,  60),
+    green       = Color3.fromRGB( 60, 200, 120),
+    orange      = Color3.fromRGB(220, 140,  40),
+    statusBg    = Color3.fromRGB(  6,   4,  16),
+}
+
+-- ============================================================
+-- 共用：parentUI、enableDrag
+-- ============================================================
+local function parentUI(g)
+    local ok = false
+    if not ok then ok = pcall(function() if type(gethui)=="function" then g.Parent=gethui() else error() end end) end
+    if not ok then ok = pcall(function() g.Parent = CoreGui end) end
+    if not ok then g.Parent = playerGui end
+end
+
+local function enableDrag(frame, handle)
+    local dragging, dragStart, startPos, dragInput = false, nil, nil, nil
+    local function update(input)
+        local d = input.Position - dragStart
+        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X,
+                                   startPos.Y.Scale, startPos.Y.Offset + d.Y)
+    end
+    handle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true dragStart = input.Position startPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    handle.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then update(input) end
+    end)
+end
+
+-- ============================================================
+-- ★ 判斷 PlaceId
+-- ============================================================
+local currentPlaceId = game.PlaceId
+
+if currentPlaceId ~= TARGET_PLACE_ID then
+    -- ========================================================
+    -- 不在目標遊戲：只顯示「傳送到門廳」小視窗
+    -- ========================================================
+
+    local tpGui = Instance.new("ScreenGui")
+    tpGui.Name = "DoormanTeleportUI"
+    tpGui.ResetOnSpawn = false
+    tpGui.IgnoreGuiInset = true
+    tpGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+    tpGui.DisplayOrder = 10001
+    parentUI(tpGui)
+
+    local tpFrame = Instance.new("Frame")
+    tpFrame.Size = UDim2.new(0, 260, 0, 150)
+    tpFrame.Position = UDim2.new(0.5, -130, 0.5, -75)
+    tpFrame.BackgroundColor3 = THEME.bg
+    tpFrame.BorderSizePixel = 0
+    tpFrame.Parent = tpGui
+    Instance.new("UICorner", tpFrame).CornerRadius = UDim.new(0, 10)
+    local s0 = Instance.new("UIStroke")
+    s0.Color = THEME.primaryDark s0.Thickness = 1.5 s0.Parent = tpFrame
+
+    -- 標題列
+    local tpTitleBar = Instance.new("Frame")
+    tpTitleBar.Size = UDim2.new(1, 0, 0, 30)
+    tpTitleBar.BackgroundColor3 = THEME.titleBg
+    tpTitleBar.Parent = tpFrame
+    Instance.new("UICorner", tpTitleBar).CornerRadius = UDim.new(0, 10)
+
+    local tpTitleLabel = Instance.new("TextLabel")
+    tpTitleLabel.Size = UDim2.new(1, -12, 1, 0)
+    tpTitleLabel.Position = UDim2.new(0, 10, 0, 0)
+    tpTitleLabel.BackgroundTransparency = 1
+    tpTitleLabel.Text = "🚪 貓玲的門衛腳本"
+    tpTitleLabel.TextSize = 13
+    tpTitleLabel.Font = Enum.Font.GothamBold
+    tpTitleLabel.TextColor3 = THEME.accent
+    tpTitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    tpTitleLabel.Parent = tpTitleBar
+
+    -- 警告提示
+    local tpHint = Instance.new("TextLabel")
+    tpHint.Size = UDim2.new(0.9, 0, 0, 30)
+    tpHint.Position = UDim2.new(0.05, 0, 0, 36)
+    tpHint.BackgroundTransparency = 1
+    tpHint.Text = "⚠ 請先關閉 Verify TP 再傳送"
+    tpHint.TextSize = 11
+    tpHint.Font = Enum.Font.GothamBold
+    tpHint.TextColor3 = THEME.orange
+    tpHint.TextXAlignment = Enum.TextXAlignment.Center
+    tpHint.Parent = tpFrame
+
+    -- 傳送大按鈕
+    local tpButton = Instance.new("TextButton")
+    tpButton.Size = UDim2.new(0.85, 0, 0, 44)
+    tpButton.Position = UDim2.new(0.075, 0, 0, 72)
+    tpButton.BackgroundColor3 = THEME.primary
+    tpButton.Text = "🛸  傳送到門廳"
+    tpButton.TextSize = 15
+    tpButton.Font = Enum.Font.GothamBold
+    tpButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    tpButton.Parent = tpFrame
+    Instance.new("UICorner", tpButton).CornerRadius = UDim.new(0, 8)
+    local tpBtnStroke = Instance.new("UIStroke")
+    tpBtnStroke.Color = THEME.primaryDark tpBtnStroke.Thickness = 1.5 tpBtnStroke.Parent = tpButton
+
+    -- 底部狀態列
+    local tpStatus = Instance.new("TextLabel")
+    tpStatus.Size = UDim2.new(0.9, 0, 0, 20)
+    tpStatus.Position = UDim2.new(0.05, 0, 1, -24)
+    tpStatus.BackgroundColor3 = THEME.statusBg
+    tpStatus.Text = string.format("目前 PlaceId: %d", currentPlaceId)
+    tpStatus.TextSize = 10
+    tpStatus.Font = Enum.Font.Gotham
+    tpStatus.TextColor3 = THEME.textMuted
+    tpStatus.Parent = tpFrame
+    Instance.new("UICorner", tpStatus).CornerRadius = UDim.new(0, 4)
+
+    enableDrag(tpFrame, tpTitleBar)
+
+    -- ── 傳送邏輯 ──
+    tpButton.MouseButton1Click:Connect(function()
+        tpButton.Text       = "傳送中..."
+        tpButton.BackgroundColor3 = THEME.orange
+        tpStatus.Text       = "排入 AutoExec 並傳送..."
+        tpStatus.TextColor3 = THEME.accentGlow
+
+        -- 把「設定 AutoStart 旗標」排入傳送後執行
+        -- 使用者需另外在 autoexec 資料夾放本腳本
+        -- 這裡只負責設旗標，腳本本體由 autoexec 自動載入
+        pcall(function()
+            local queueTP = queueonteleport or queue_on_teleport
+            if queueTP then
+                queueTP([[
+if not game:IsLoaded() then game.Loaded:Wait() end
+repeat task.wait() until game:GetService("Players").LocalPlayer
+task.wait(0.3)
+_G.DoormanAutoStart = true
+print("[門衛腳本] AutoStart 旗標已設定")
+]])
+            else
+                -- 執行器不支援 queueonteleport，顯示提示後仍傳送
+                tpStatus.Text       = "⚠ 不支援自動執行，傳送後請手動執行"
+                tpStatus.TextColor3 = THEME.red
+                task.wait(1.8)
+            end
+        end)
+
+        -- 執行傳送
+        local ok, err = pcall(function()
+            TeleportService:Teleport(TARGET_PLACE_ID, player)
+        end)
+        if not ok then
+            tpButton.Text             = "🛸  傳送到門廳"
+            tpButton.BackgroundColor3 = THEME.primary
+            tpStatus.Text             = "❌ 傳送失敗：" .. tostring(err):sub(1, 40)
+            tpStatus.TextColor3       = THEME.red
+        end
+    end)
+
+    print("🚪 門衛腳本 v1.1：不在目標遊戲，顯示傳送介面")
+    return  -- 不繼續執行主 UI
+end
+
+-- ============================================================
+-- ★ 在目標遊戲（PlaceId 符合）：顯示主 UI
+-- 若 _G.DoormanAutoStart == true 則自動啟動獲取
+-- ============================================================
+local autoStart = (_G.DoormanAutoStart == true)
+_G.DoormanAutoStart = nil  -- 消費旗標，避免重複觸發
+
+-- ============================================================
+-- 變數
+-- ============================================================
+local grabbing   = false
+local grabThread = nil
+
+-- ============================================================
+-- 主 GUI
+-- ============================================================
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "DoormanUI"
+screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = true
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+screenGui.DisplayOrder = 10001
+parentUI(screenGui)
+
+-- 主框架
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 280, 0, 280)
+mainFrame.Position = UDim2.new(0.5, -140, 0.5, -140)
+mainFrame.BackgroundColor3 = THEME.bg
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = THEME.primaryDark mainStroke.Thickness = 1.5 mainStroke.Parent = mainFrame
+
+-- 標題列
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 32)
+titleBar.BackgroundColor3 = THEME.titleBg
+titleBar.Parent = mainFrame
+Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 10)
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, -60, 1, 0)
+titleLabel.Position = UDim2.new(0, 10, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "🚪 貓玲的門衛腳本"
+titleLabel.TextSize = 13
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextColor3 = THEME.accent
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = titleBar
+
+local minimizeButton = Instance.new("TextButton")
+minimizeButton.Size = UDim2.new(0, 24, 0, 24)
+minimizeButton.Position = UDim2.new(1, -54, 0, 4)
+minimizeButton.BackgroundColor3 = THEME.tabActive
+minimizeButton.Text = "─"
+minimizeButton.TextSize = 12
+minimizeButton.Font = Enum.Font.GothamBold
+minimizeButton.TextColor3 = THEME.textMain
+minimizeButton.Parent = titleBar
+Instance.new("UICorner", minimizeButton).CornerRadius = UDim.new(0, 5)
+
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0, 24, 0, 24)
+closeButton.Position = UDim2.new(1, -28, 0, 4)
+closeButton.BackgroundColor3 = THEME.red
+closeButton.Text = "✕"
+closeButton.TextSize = 12
+closeButton.Font = Enum.Font.GothamBold
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.Parent = titleBar
+Instance.new("UICorner", closeButton).CornerRadius = UDim.new(0, 5)
+
+-- 分頁列
+local tabBar = Instance.new("Frame")
+tabBar.Size = UDim2.new(0.9, 0, 0, 28)
+tabBar.Position = UDim2.new(0.05, 0, 0, 38)
+tabBar.BackgroundColor3 = THEME.tabBg
+tabBar.Parent = mainFrame
+Instance.new("UICorner", tabBar).CornerRadius = UDim.new(0, 6)
+
+local function createTab(text, index, total)
+    local w = 1 / total
+    local tab = Instance.new("TextButton")
+    tab.Size = UDim2.new(w, -4, 1, -4)
+    tab.Position = UDim2.new((index - 1) * w, 2, 0, 2)
+    tab.BackgroundColor3 = THEME.tabBg
+    tab.Text = text
+    tab.TextSize = 12
+    tab.Font = Enum.Font.GothamBold
+    tab.TextColor3 = THEME.textMuted
+    tab.Parent = tabBar
+    Instance.new("UICorner", tab).CornerRadius = UDim.new(0, 4)
+    return tab
+end
+
+local tab1 = createTab("⚡ 獲取", 1, 2)
+local tab2 = createTab("📖 說明", 2, 2)
+
+-- 內容容器
+local contentContainer = Instance.new("Frame")
+contentContainer.Size = UDim2.new(0.9, 0, 0, 185)
+contentContainer.Position = UDim2.new(0.05, 0, 0, 72)
+contentContainer.BackgroundTransparency = 1
+contentContainer.ClipsDescendants = true
+contentContainer.Parent = mainFrame
+
+local function createScrollPage(parent)
+    local page = Instance.new("ScrollingFrame")
+    page.Size = UDim2.new(1, 0, 1, 0)
+    page.BackgroundTransparency = 1
+    page.BorderSizePixel = 0
+    page.ScrollBarThickness = 4
+    page.ScrollBarImageColor3 = THEME.primary
+    page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    page.Visible = false
+    page.Parent = parent
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 8)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    layout.Parent = page
+    local pad = Instance.new("UIPadding")
+    pad.PaddingRight = UDim.new(0, 6) pad.PaddingTop = UDim.new(0, 4) pad.Parent = page
+    return page
+end
+
+local page1 = createScrollPage(contentContainer)
+local page2 = createScrollPage(contentContainer)
+page1.Visible = true
+
+local function switchTab(n)
+    page1.Visible = (n == 1) page2.Visible = (n == 2)
+    for i, t in ipairs({tab1, tab2}) do
+        t.BackgroundColor3 = (i == n) and THEME.tabActive or THEME.tabBg
+        t.TextColor3       = (i == n) and THEME.textMain  or THEME.textMuted
+    end
+end
+tab1.MouseButton1Click:Connect(function() switchTab(1) end)
+tab2.MouseButton1Click:Connect(function() switchTab(2) end)
+switchTab(1)
+
+-- 狀態列
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(0.9, 0, 0, 26)
+statusLabel.Position = UDim2.new(0.05, 0, 1, -32)
+statusLabel.BackgroundColor3 = THEME.statusBg
+statusLabel.Text = "系統就緒"
+statusLabel.TextSize = 11
+statusLabel.Font = Enum.Font.GothamBold
+statusLabel.TextColor3 = THEME.primary
+statusLabel.Parent = mainFrame
+Instance.new("UICorner", statusLabel).CornerRadius = UDim.new(0, 5)
+
+-- ============================================================
+-- 頁面 1：獲取
+-- ============================================================
+
+-- 傳送成功 AutoStart 提示（只在從傳送來的情況顯示）
+if autoStart then
+    local autoLabel = Instance.new("TextLabel")
+    autoLabel.Size = UDim2.new(1, 0, 0, 22)
+    autoLabel.BackgroundTransparency = 1
+    autoLabel.Text = "✅ 傳送成功，已自動啟動獲取"
+    autoLabel.TextSize = 11
+    autoLabel.Font = Enum.Font.GothamBold
+    autoLabel.TextColor3 = THEME.green
+    autoLabel.TextXAlignment = Enum.TextXAlignment.Center
+    autoLabel.LayoutOrder = 0
+    autoLabel.Parent = page1
+end
+
+local descLabel = Instance.new("TextLabel")
+descLabel.Size = UDim2.new(1, 0, 0, 36)
+descLabel.BackgroundTransparency = 1
+descLabel.Text = "持續偵測場上所有 ClickDetector\n並自動全部觸發，含之後新增的"
+descLabel.TextSize = 11
+descLabel.Font = Enum.Font.Gotham
+descLabel.TextColor3 = THEME.textMuted
+descLabel.TextXAlignment = Enum.TextXAlignment.Center
+descLabel.TextWrapped = true
+descLabel.LayoutOrder = 1
+descLabel.Parent = page1
+
+-- 大按鈕框
+local grabFrame = Instance.new("Frame")
+grabFrame.Size = UDim2.new(1, 0, 0, 80)
+grabFrame.BackgroundColor3 = THEME.bgRow
+grabFrame.LayoutOrder = 2
+grabFrame.Parent = page1
+Instance.new("UICorner", grabFrame).CornerRadius = UDim.new(0, 8)
+
+local grabButton = Instance.new("TextButton")
+grabButton.Size = UDim2.new(0.85, 0, 0, 52)
+grabButton.Position = UDim2.new(0.075, 0, 0, 14)
+grabButton.BackgroundColor3 = THEME.primary
+grabButton.Text = "🛸  開始獲取"
+grabButton.TextSize = 16
+grabButton.Font = Enum.Font.GothamBold
+grabButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+grabButton.Parent = grabFrame
+Instance.new("UICorner", grabButton).CornerRadius = UDim.new(0, 8)
+local grabStroke = Instance.new("UIStroke")
+grabStroke.Color = THEME.primaryDark grabStroke.Thickness = 1.5 grabStroke.Parent = grabButton
+
+-- 計數列
+local countFrame = Instance.new("Frame")
+countFrame.Size = UDim2.new(1, 0, 0, 32)
+countFrame.BackgroundColor3 = THEME.bgRow
+countFrame.LayoutOrder = 3
+countFrame.Parent = page1
+Instance.new("UICorner", countFrame).CornerRadius = UDim.new(0, 6)
+
+local countLabel = Instance.new("TextLabel")
+countLabel.Size = UDim2.new(1, -12, 1, 0)
+countLabel.Position = UDim2.new(0, 6, 0, 0)
+countLabel.BackgroundTransparency = 1
+countLabel.Text = "等待啟動中..."
+countLabel.TextSize = 11
+countLabel.Font = Enum.Font.Gotham
+countLabel.TextColor3 = THEME.textMuted
+countLabel.TextXAlignment = Enum.TextXAlignment.Left
+countLabel.Parent = countFrame
+
+-- ── startGrabbing / stopGrabbing ──
+local function startGrabbing()
+    grabbing = true
+    grabButton.Text             = "🔴  停止獲取"
+    grabButton.BackgroundColor3 = THEME.red
+    grabStroke.Color            = Color3.fromRGB(140, 20, 40)
+    grabFrame.BackgroundColor3  = Color3.fromRGB(28, 8, 14)
+    statusLabel.Text            = "✅ 獲取中..."
+    statusLabel.TextColor3      = THEME.green
+
+    grabThread = task.spawn(function()
+        local cycle = 0
+        while grabbing do
+            cycle = cycle + 1
+            local found = 0
+            for _, obj in ipairs(Workspace:GetDescendants()) do
+                if obj:IsA("ClickDetector") then
+                    found = found + 1
+                    pcall(function() fireclickdetector(obj) end)
+                end
+            end
+            countLabel.Text      = string.format("第 %d 輪 ｜ 偵測到 %d 個 ClickDetector", cycle, found)
+            countLabel.TextColor3 = THEME.accentGlow
+            task.wait(0.5)
+        end
+    end)
+end
+
+local function stopGrabbing()
+    grabbing = false
+    if grabThread then task.cancel(grabThread) grabThread = nil end
+    grabButton.Text             = "🛸  開始獲取"
+    grabButton.BackgroundColor3 = THEME.primary
+    grabStroke.Color            = THEME.primaryDark
+    grabFrame.BackgroundColor3  = THEME.bgRow
+    statusLabel.Text            = "系統就緒"
+    statusLabel.TextColor3      = THEME.primary
+    countLabel.Text             = "等待啟動中..."
+    countLabel.TextColor3       = THEME.textMuted
+end
+
+grabButton.MouseButton1Click:Connect(function()
+    if not grabbing then startGrabbing() else stopGrabbing() end
+end)
+
+-- ============================================================
+-- 頁面 2：說明
+-- ============================================================
+
+-- 字體大小 + 顏色列
+local settingFrame = Instance.new("Frame")
+settingFrame.Size = UDim2.new(1, 0, 0, 32)
+settingFrame.BackgroundColor3 = THEME.bgRow
+settingFrame.LayoutOrder = 1
+settingFrame.Parent = page2
+Instance.new("UICorner", settingFrame).CornerRadius = UDim.new(0, 6)
+
+local fontLabel = Instance.new("TextLabel")
+fontLabel.Size = UDim2.new(0, 68, 1, 0)
+fontLabel.Position = UDim2.new(0, 6, 0, 0)
+fontLabel.BackgroundTransparency = 1
+fontLabel.Text = "字體大小:"
+fontLabel.TextSize = 12
+fontLabel.Font = Enum.Font.GothamBold
+fontLabel.TextColor3 = THEME.textSub
+fontLabel.TextXAlignment = Enum.TextXAlignment.Left
+fontLabel.TextYAlignment = Enum.TextYAlignment.Center
+fontLabel.Parent = settingFrame
+
+local fontSizeInput = Instance.new("TextBox")
+fontSizeInput.Size = UDim2.new(0, 48, 0, 22)
+fontSizeInput.Position = UDim2.new(0, 76, 0, 5)
+fontSizeInput.BackgroundColor3 = THEME.bgInput
+fontSizeInput.BorderSizePixel = 1
+fontSizeInput.BorderColor3 = THEME.primaryDark
+fontSizeInput.Text = "12"
+fontSizeInput.TextSize = 12
+fontSizeInput.Font = Enum.Font.Gotham
+fontSizeInput.TextColor3 = THEME.textMain
+fontSizeInput.Parent = settingFrame
+Instance.new("UICorner", fontSizeInput).CornerRadius = UDim.new(0, 5)
+
+local colorLabel = Instance.new("TextLabel")
+colorLabel.Size = UDim2.new(0, 36, 1, 0)
+colorLabel.Position = UDim2.new(0, 128, 0, 0)
+colorLabel.BackgroundTransparency = 1
+colorLabel.Text = "顏色:"
+colorLabel.TextSize = 12
+colorLabel.Font = Enum.Font.GothamBold
+colorLabel.TextColor3 = THEME.textSub
+colorLabel.TextXAlignment = Enum.TextXAlignment.Left
+colorLabel.TextYAlignment = Enum.TextYAlignment.Center
+colorLabel.Parent = settingFrame
+
+local colorChoices = {
+    { name = "紫", color = Color3.fromRGB(220, 210, 255) },
+    { name = "金", color = Color3.fromRGB(255, 210, 120) },
+    { name = "青", color = Color3.fromRGB(120, 220, 200) },
+    { name = "白", color = Color3.fromRGB(240, 240, 245) },
+    { name = "橙", color = Color3.fromRGB(255, 160,  80) },
+}
+local colorIndex = 1
+
+local colorCycleButton = Instance.new("TextButton")
+colorCycleButton.Size = UDim2.new(0, 68, 0, 22)
+colorCycleButton.Position = UDim2.new(1, -72, 0, 5)
+colorCycleButton.BackgroundColor3 = THEME.tabActive
+colorCycleButton.Text = "紫 ▶"
+colorCycleButton.TextSize = 11
+colorCycleButton.Font = Enum.Font.GothamBold
+colorCycleButton.TextColor3 = colorChoices[1].color
+colorCycleButton.Parent = settingFrame
+Instance.new("UICorner", colorCycleButton).CornerRadius = UDim.new(0, 5)
+
+-- 說明文字框
+local textRow = Instance.new("Frame")
+textRow.Size = UDim2.new(1, 0, 0, 320)
+textRow.BackgroundColor3 = THEME.bgRow
+textRow.LayoutOrder = 2
+textRow.Parent = page2
+Instance.new("UICorner", textRow).CornerRadius = UDim.new(0, 6)
+
+local explainLabel = Instance.new("TextLabel")
+explainLabel.Size = UDim2.new(1, -16, 1, -16)
+explainLabel.Position = UDim2.new(0, 8, 0, 8)
+explainLabel.BackgroundTransparency = 1
+explainLabel.Text =
+    "【門衛腳本使用說明】\n\n" ..
+    "本腳本自動觸發場上所有\n" ..
+    "ClickDetector（可點擊偵測器）。\n\n" ..
+    "【傳送功能】\n" ..
+    "若不在目標遊戲，腳本只顯示\n" ..
+    "傳送視窗。請先關閉執行器的\n" ..
+    "Verify TP，再按傳送。\n" ..
+    "傳送後獲取會自動啟動。\n\n" ..
+    "【AutoExec 建議】\n" ..
+    "將本腳本放入執行器的 autoexec\n" ..
+    "資料夾，傳送後才能自動重載。\n\n" ..
+    "【獲取 分頁】\n" ..
+    "每 0.5 秒掃描整個場景並觸發\n" ..
+    "所有 ClickDetector，含新增的。\n\n" ..
+    "【停止】\n" ..
+    "再按一次按鈕即可停止。\n\n" ..
+    "⚠ 請自行承擔使用腳本的責任。"
+explainLabel.TextSize = 12
+explainLabel.Font = Enum.Font.Gotham
+explainLabel.TextColor3 = THEME.textMain
+explainLabel.TextXAlignment = Enum.TextXAlignment.Left
+explainLabel.TextYAlignment = Enum.TextYAlignment.Top
+explainLabel.TextWrapped = true
+explainLabel.LineHeight = 1.35
+explainLabel.Parent = textRow
+
+fontSizeInput.FocusLost:Connect(function()
+    local v = tonumber(fontSizeInput.Text)
+    v = v and math.clamp(v, 8, 24) or 12
+    fontSizeInput.Text = tostring(v)
+    explainLabel.TextSize = v
+end)
+
+colorCycleButton.MouseButton1Click:Connect(function()
+    colorIndex = (colorIndex % #colorChoices) + 1
+    local c = colorChoices[colorIndex]
+    explainLabel.TextColor3   = c.color
+    colorCycleButton.Text      = c.name .. " ▶"
+    colorCycleButton.TextColor3 = c.color
+end)
+
+-- ============================================================
+-- 最小化 / 展開
+-- ============================================================
+enableDrag(mainFrame, titleBar)
+
+local miniFrame = Instance.new("Frame")
+miniFrame.Size = UDim2.new(0, 160, 0, 32)
+miniFrame.Position = UDim2.new(0.5, -80, 0, 30)
+miniFrame.BackgroundColor3 = THEME.titleBg
+miniFrame.Visible = false
+miniFrame.Parent = screenGui
+Instance.new("UICorner", miniFrame).CornerRadius = UDim.new(0, 6)
+local miniStroke = Instance.new("UIStroke")
+miniStroke.Color = THEME.primaryDark miniStroke.Thickness = 1.5 miniStroke.Parent = miniFrame
+
+local miniTitle = Instance.new("TextLabel")
+miniTitle.Text = "🚪 門衛腳本"
+miniTitle.Size = UDim2.new(1, -36, 1, 0)
+miniTitle.Position = UDim2.new(0, 8, 0, 0)
+miniTitle.BackgroundTransparency = 1
+miniTitle.Font = Enum.Font.GothamBold
+miniTitle.TextSize = 13
+miniTitle.TextColor3 = THEME.accent
+miniTitle.TextXAlignment = Enum.TextXAlignment.Left
+miniTitle.Parent = miniFrame
+
+local expandButton = Instance.new("TextButton")
+expandButton.Text = "+"
+expandButton.Size = UDim2.new(0, 24, 0, 24)
+expandButton.Position = UDim2.new(1, -28, 0, 4)
+expandButton.BackgroundColor3 = THEME.primary
+expandButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+expandButton.Font = Enum.Font.GothamBold
+expandButton.Parent = miniFrame
+Instance.new("UICorner", expandButton).CornerRadius = UDim.new(0, 5)
+
+enableDrag(miniFrame, miniFrame)
+
+minimizeButton.MouseButton1Click:Connect(function() mainFrame.Visible = false miniFrame.Visible = true end)
+expandButton.MouseButton1Click:Connect(function()   miniFrame.Visible = false mainFrame.Visible = true end)
+
+closeButton.MouseButton1Click:Connect(function()
+    stopGrabbing()
+    screenGui:Destroy()
+end)
+
+-- ============================================================
+-- AutoStart：從傳送過來時自動啟動獲取
+-- ============================================================
+if autoStart then
+    task.wait(0.3)
+    startGrabbing()
+end
+
+print("🚪 貓玲的門衛腳本 v1.1 已載入！PlaceId:", currentPlaceId)
