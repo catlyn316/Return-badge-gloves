@@ -192,9 +192,9 @@ if currentPlaceId ~= TARGET_PLACE_ID then
                 queueTP([[
 if not game:IsLoaded() then game.Loaded:Wait() end
 repeat task.wait() until game:GetService("Players").LocalPlayer
-task.wait(0.3)
+task.wait(0.5)
 _G.DoormanAutoStart = true
-print("[門衛腳本] AutoStart 旗標已設定")
+loadstring(game:HttpGet('https://raw.githubusercontent.com/catlyn316/Return-badge-gloves/refs/heads/main/Doorkeeper'))()
 ]])
             else
                 -- 執行器不支援 queueonteleport，顯示提示後仍傳送
@@ -406,11 +406,32 @@ descLabel.TextWrapped = true
 descLabel.LayoutOrder = 1
 descLabel.Parent = page1
 
+-- 聲音提示列
+local volumeWarning = Instance.new("Frame")
+volumeWarning.Size = UDim2.new(1, 0, 0, 28)
+volumeWarning.BackgroundColor3 = Color3.fromRGB(40, 20, 10)
+volumeWarning.LayoutOrder = 2
+volumeWarning.Parent = page1
+Instance.new("UICorner", volumeWarning).CornerRadius = UDim.new(0, 6)
+local volStroke = Instance.new("UIStroke")
+volStroke.Color = THEME.orange volStroke.Thickness = 1 volStroke.Parent = volumeWarning
+
+local volumeLabel = Instance.new("TextLabel")
+volumeLabel.Size = UDim2.new(1, -10, 1, 0)
+volumeLabel.Position = UDim2.new(0, 5, 0, 0)
+volumeLabel.BackgroundTransparency = 1
+volumeLabel.Text = "🔊 記得先把聲音調小！"
+volumeLabel.TextSize = 12
+volumeLabel.Font = Enum.Font.GothamBold
+volumeLabel.TextColor3 = THEME.orange
+volumeLabel.TextXAlignment = Enum.TextXAlignment.Center
+volumeLabel.Parent = volumeWarning
+
 -- 大按鈕框
 local grabFrame = Instance.new("Frame")
 grabFrame.Size = UDim2.new(1, 0, 0, 80)
 grabFrame.BackgroundColor3 = THEME.bgRow
-grabFrame.LayoutOrder = 2
+grabFrame.LayoutOrder = 3
 grabFrame.Parent = page1
 Instance.new("UICorner", grabFrame).CornerRadius = UDim.new(0, 8)
 
@@ -431,7 +452,7 @@ grabStroke.Color = THEME.primaryDark grabStroke.Thickness = 1.5 grabStroke.Paren
 local countFrame = Instance.new("Frame")
 countFrame.Size = UDim2.new(1, 0, 0, 32)
 countFrame.BackgroundColor3 = THEME.bgRow
-countFrame.LayoutOrder = 3
+countFrame.LayoutOrder = 4
 countFrame.Parent = page1
 Instance.new("UICorner", countFrame).CornerRadius = UDim.new(0, 6)
 
