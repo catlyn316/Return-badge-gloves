@@ -126,7 +126,7 @@ if currentPlaceId ~= TARGET_PLACE_ID then
     Instance.new("UICorner", tpTitleBar).CornerRadius = UDim.new(0, 10)
 
     local tpTitleLabel = Instance.new("TextLabel")
-    tpTitleLabel.Size = UDim2.new(1, -12, 1, 0)
+    tpTitleLabel.Size = UDim2.new(1, -40, 1, 0)
     tpTitleLabel.Position = UDim2.new(0, 10, 0, 0)
     tpTitleLabel.BackgroundTransparency = 1
     tpTitleLabel.Text = "🚪 貓玲的門衛腳本"
@@ -135,6 +135,18 @@ if currentPlaceId ~= TARGET_PLACE_ID then
     tpTitleLabel.TextColor3 = THEME.accent
     tpTitleLabel.TextXAlignment = Enum.TextXAlignment.Left
     tpTitleLabel.Parent = tpTitleBar
+
+    local tpCloseButton = Instance.new("TextButton")
+    tpCloseButton.Size = UDim2.new(0, 24, 0, 24)
+    tpCloseButton.Position = UDim2.new(1, -28, 0, 3)
+    tpCloseButton.BackgroundColor3 = THEME.red
+    tpCloseButton.Text = "x"
+    tpCloseButton.TextSize = 12
+    tpCloseButton.Font = Enum.Font.GothamBold
+    tpCloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    tpCloseButton.Parent = tpTitleBar
+    Instance.new("UICorner", tpCloseButton).CornerRadius = UDim.new(0, 5)
+    tpCloseButton.MouseButton1Click:Connect(function() tpGui:Destroy() end)
 
     -- 警告提示
     local tpHint = Instance.new("TextLabel")
